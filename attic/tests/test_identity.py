@@ -32,7 +32,7 @@ def controller(v, field, answer):
 
 
 def test_empty_vars():
-    for src in (gates.controller(CFG), gates.after_verify(CFG), gates.gate_account(CFG), gates.after_account({"product_words": {}, "product_default": "x", "line": "y"})):
+    for src in (gates.controller(CFG), gates.after_verify(CFG), gates.gate_account(CFG), gates.after_account(C.account_cfg(P))):
         run(src, dict())
     v = run(gates.gate_account(CFG), dict())
     assert v["auth_account"] == "denied", v
@@ -93,18 +93,18 @@ def test_gate_fails_closed_and_is_single_use():
     assert run(gates.gate_account(CFG), dict(good))["auth_account"] == "granted"
     for broken in (dict(good, id_state="open"), dict(good, id_state="failed"), {k: v for k, v in good.items() if k != "idok_phone_last4"}, dict(good, acct_used="yes"), dict()):
         assert run(gates.gate_account(CFG), dict(broken))["auth_account"] == "denied", broken
-    v = run(gates.after_account({"product_words": P["account"]["product_words"], "product_default": "x", "line": P["account"]["line"]}),
-            dict(auth_account="granted", acct_ok="true", products_json=json.dumps([dict(type="credit_card", card_last4="4821", past_due=420.0, days_late=6)])))
+    v = run(gates.after_account(C.account_cfg(P)),
+            dict(auth_account="granted", acct_ok="true", now="2026-10-14T11:00", products_json=json.dumps([dict(product_id="p1", type="credit_card", card_last4="4821", past_due=420.0, minimum_payment=126.0, days_late=6)])))
     assert v["auth_account"] == "used" and v["acct_used"] == "yes" and v["acct_state"] == "ok" and "4821" in v["debt_line"] and "420.00" in v["debt_line"], v
     v2 = run(gates.gate_account(CFG), dict(good, **{k: v[k] for k in ("acct_used",)}))
     assert v2["auth_account"] == "denied", "authorisation must be single-use"
-    v = run(gates.after_account({"product_words": {}, "product_default": "x", "line": "y"}), dict(auth_account="granted", acct_ok="false"))
+    v = run(gates.after_account(C.account_cfg(P)), dict(auth_account="granted", acct_ok="false"))
     assert v["auth_account"] == "used" and v["acct_state"] == "error", "consumed even when the read failed"
 
 
 def test_lint():
     wf = C.compile_identity(P, API)
-    protected = {P["account"]["op"]: P["account"]["auth_var"]}
+    protected = {P["account"]["op"]: P["account"]["auth_var"], P["promise"]["op"]: P["promise"]["auth_var"]}
     assert lint.lint(wf, API, protected) == []
     bad = copy.deepcopy(wf)
     bad["nodes"]["after_verify"]["transitions"].insert(0, {"target_node": "fetch_account", "description": "x", "condition": {"operator": "always"}})

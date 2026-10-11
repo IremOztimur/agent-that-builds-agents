@@ -15,7 +15,7 @@ import freya
 from score import http
 
 STATE = str(KIT / ".freya-agents.json")
-SHOW = ("id_state", "idok_", "auth_", "acct_", "go", "say", "cand_", "vf_", "debt_line")
+SHOW = ("id_state", "idok_", "auth_", "acct_", "go", "say", "cand_", "vf_", "debt_line", "negotiate", "prop_", "conf_", "promise_", "pr_", "call.")
 
 
 def strip(x):

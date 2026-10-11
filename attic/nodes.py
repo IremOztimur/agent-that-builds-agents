@@ -57,10 +57,11 @@ def engine_call(api, op, fields, retries=0, post=""):
     `fields` maps a body field of the tool API to its default. A field the API does not know is a build error."""
     known = api.fields(op)
     props = {"customer_id": {"type": "string", "default": "{{customer_id}}"}}
-    for name, default in fields.items():
+    for name, spec in fields.items():
         if name not in known:
             raise ValueError("%s has no field %s in the tool API" % (op, name))
-        props[name] = {"type": "string", "default": default}
+        default, typ = spec if isinstance(spec, tuple) else (spec, "string")
+        props[name] = {"type": typ, "default": default}
     params = _http_params(api.url(op))
     params["body"] = {"type": "object", "properties": props, "required": []}
     call = {"type": "function", "config": {"timeoutMs": 12000, "maxRetries": retries},

@@ -16,7 +16,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import gates
 from nodes import Api
 
-VALIDATED_VARS = {"customer_id", "cand_field", "cand_answer"}
+VALIDATED_VARS = {"customer_id", "cand_field", "cand_answer", "prop_product", "prop_amount", "prop_date"}
 
 
 def _calls(node):
@@ -112,6 +112,7 @@ if __name__ == "__main__":
     wf = json.load(open(sys.argv[1]))
     api = Api.load(sys.argv[2])
     import policy_a
-    problems = lint(wf, api, {policy_a.POLICY["account"]["op"]: policy_a.POLICY["account"]["auth_var"]})
+    P = policy_a.POLICY
+    problems = lint(wf, api, {P["account"]["op"]: P["account"]["auth_var"], P["promise"]["op"]: P["promise"]["auth_var"]})
     print("\n".join(problems) or "lint clean")
     sys.exit(1 if problems else 0)

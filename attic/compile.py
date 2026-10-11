@@ -11,16 +11,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import gates
 from nodes import Api, always, api_node, close_node, code_node, controller_tool, engine_call, hang_up, when
 
-IDENTITY_TASK = """You are running a security check. You do not know why the bank is calling.
 
-SECRECY: never say the words {secrecy}, and never mention an amount or why the bank is calling, not even to the customer. If asked what the call is about, say: "{secrecy_reply}"
-
-THE CHECK: the system decides which question is pending and tells you what to say. Never judge an answer yourself.
-- Whenever the customer gives an answer to a security question, CALL report_answer. Use field date_of_birth with the date as YYYY-MM-DD, whatever way the customer said it (a date given only as numbers is day, then month, then year), or field phone_last4 with exactly four digits. If the customer gives a number or date in parts, wait until you have all of it. If the customer corrects themselves, use the corrected value.
-- Call report_answer at most once per message, and only when the customer gave an answer.
-- After the tool result arrives, say exactly the line after SAY and nothing else, and call no tool.
-- If the customer did not give an answer (a question, a comment), reply in one short sentence and repeat the pending question. Never answer for them.
-SAY: {{{{say}}}}"""
 
 
 def identity_cfg(ident):
@@ -38,14 +29,51 @@ def identity_node(name, policy, on_enter, with_controller=True):
         "Reports the customer's answer to a security question. CALL it every time the customer gives an answer. It does not check the answer.",
         {"field": {"type": "string", "enum": fields, "description": "Which question the answer belongs to. One of: " + ", ".join(fields) + "."},
          "answer": {"type": "string", "description": "date_of_birth: the date as YYYY-MM-DD. phone_last4: the four digits."}})
-    task = IDENTITY_TASK.format(secrecy=", ".join('"%s"' % w for w in ident["secrecy_words"]), secrecy_reply=ident["secrecy_reply"])
+    task = policy["prompts"]["identity"].replace("SECRECY_WORDS", ", ".join('"%s"' % w for w in ident["secrecy_words"])).replace("SECRECY_REPLY", ident["secrecy_reply"])
     return {"name": name, "node_type": "conversation", "on_enter": on_enter, "task_message": task,
             "tools": [tool] if with_controller else [], "max_node_turns": 30, "max_turn_transition": "close_unverified",
             "transitions": [when("verify_call", "The controller accepted a candidate answer", "go", "verify")]}
 
 
+def account_cfg(policy):
+    a = policy["account"]
+    return {"product_words": a["product_words"], "product_default": a["product_default"], "line": a["line"], "first_ask": a["first_ask"],
+            "floor_fields": a["floor_fields"], "floor_names": a["floor_names"], "bands": a["bands"], "holidays": a["holidays"]}
+
+
+def gate_cfg(policy):
+    return {"fields": [q["field"] for q in policy["identity"]["questions"]], "holidays": policy["account"]["holidays"],
+            "max_attempts": policy["promise"]["max_attempts"]}
+
+
+
+
+
+def promise_cfg(policy):
+    prm = policy["promise"]
+    return {"lines": prm["lines"], "turn_key": prm["turn_key"], "holidays": policy["account"]["holidays"]}
+
+
+def negotiate_node(policy):
+    prm = policy["promise"]
+    cfg = promise_cfg(policy)
+    prop = controller_tool(
+        "report_proposal", gates.proposal(cfg),
+        "Reports an amount and a date the customer agreed to pay. CALL it whenever an amount and a date are agreed. It does not record anything.",
+        {"amount": {"type": "number", "description": "The amount the customer agreed to pay, as a number, for example 637.5."},
+         "date": {"type": "string", "description": "The payment date as YYYY-MM-DD."}})
+    conf = controller_tool(
+        "report_confirmation", gates.confirmation(cfg),
+        "Reports the customer's answer to your read-back of the amount and the date. CALL it only after the customer replied to the read-back.",
+        {"decision": {"type": "string", "enum": ["yes", "no"], "description": "yes only if the customer clearly confirmed the read-back."}})
+    return {"name": "negotiate", "node_type": "conversation", "on_enter": {"type": "tts", "text": "Thank you, you are verified. {{debt_line}}"},
+            "on_enter_first_entry_only": True, "task_message": policy["prompts"]["negotiate"], "tools": [prop, conf],
+            "max_node_turns": 40, "max_turn_transition": "close_refused",
+            "transitions": [when("gate_promise", "The customer confirmed the stored proposal", "go", "promise")]}
+
+
 def compile_identity(policy, api, with_controller=True):
-    ident, acct = policy["identity"], policy["account"]
+    ident, acct, prm = policy["identity"], policy["account"], policy["promise"]
     vop = ident["op"]
     cfg = identity_cfg(ident)
     req, res = ident["request"], ident["response"]
@@ -67,17 +95,26 @@ def compile_identity(policy, api, with_controller=True):
         "fetch_account": api_node("fetch_account", account,
                                   [{"path": "data.products_json", "variable": "products_json"}, {"path": "data.ok", "variable": "acct_ok"}],
                                   [always("after_account")]),
-        "after_account": code_node("after_account", gates.after_account(
-            {"product_words": acct["product_words"], "product_default": acct["product_default"], "line": acct["line"]}), [
-            when("account_stated", "The account facts are ready", "acct_state", "ok"),
+        "after_account": code_node("after_account", gates.after_account(account_cfg(policy)), [
+            when("negotiate", "The account facts are ready", "acct_state", "ok"),
             always("close_account_error")]),
-        "account_stated": {"name": "account_stated", "node_type": "conversation", "on_enter": {"type": "tts", "text": "Thank you, you are verified. {{debt_line}}"},
-                           "on_enter_first_entry_only": True,
-                           "task_message": "The security check is done and you have stated the account facts. Reply in one short sentence. Call no tool.",
-                           "max_node_turns": 5, "max_turn_transition": "hang_up", "transitions": []},
+        "negotiate": negotiate_node(policy),
+        "gate_promise": code_node("gate_promise", gates.gate_promise(gate_cfg(policy)), [
+            when("create_promise_call", "Authorised to record the promise", prm["auth_var"], "granted"),
+            always("close_service_error")]),
+        "create_promise_call": api_node("create_promise_call", engine_call(api, prm["op"], {
+            prm["request"]["product_id"]: "{{prop_product}}", prm["request"]["amount"]: ("{{prop_amount}}", "number"), prm["request"]["date"]: "{{prop_date}}"}),
+            [{"path": "data." + prm["response"]["ok"], "variable": "pr_ok"}, {"path": "data." + prm["response"]["id"], "variable": "pr_id"}],
+            [always("after_promise")]),
+        "after_promise": code_node("after_promise", gates.after_promise({"max_attempts": prm["max_attempts"]}), [
+            when("close_promise", "The bank recorded the promise", "promise_state", "recorded"),
+            when("gate_promise", "The first try failed; one more try is allowed", "promise_state", "retry"),
+            always("close_service_error")]),
         "hang_up": hang_up(),
     }
     cl = policy["closings"]
+    for key, name in (("promise", "close_promise"), ("service_error", "close_service_error"), ("refused", "close_refused")):
+        nodes[name] = close_node(name, api, cl[key]["outcome"], cl[key]["reason"], cl[key]["line"])
     nodes["close_unverified"] = close_node("close_unverified", api, cl["unverified"]["outcome"], cl["unverified"]["reason"], cl["unverified"]["line"])
     nodes["close_account_error"] = close_node("close_account_error", api, cl["account_error"]["outcome"], cl["account_error"]["reason"], cl["account_error"]["line"])
     return {"initial_node": "identity_open", "system_prompt": policy["system_prompt"], "global_nodes": {}, "nodes": nodes}
