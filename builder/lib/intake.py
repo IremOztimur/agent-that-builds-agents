@@ -102,13 +102,15 @@ def ingest_folder(folder, dest):
         sys.exit("the case folder %s has no documents" % folder)
     dest = pathlib.Path(dest)
     (dest / "original").mkdir(parents=True, exist_ok=True)
-    parts, documents, unconverted, contract = [], [], [], None
+    parts, documents, unconverted, visual, contract = [], [], [], [], None
     for f in files:
         rel = str(f.relative_to(root))
         target = dest / "original" / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(f.read_bytes())
         documents.append(rel)
+        if f.suffix.lower() in IMAGES or f.suffix.lower() == ".pdf":
+            visual.append(rel)          # a drawing's extracted text lists the boxes and loses the arrows: the agent looks at it
         text = read_text(f)
         if text is None or not text.strip():
             unconverted.append(rel)
@@ -121,7 +123,7 @@ def ingest_folder(folder, dest):
                     contract = "input/original/" + rel
             except Exception:
                 pass
-    if not parts:
-        sys.exit("no document in %s could be read as text" % folder)
-    (dest / "corpus.md").write_text("\n".join(parts))
-    return {"corpus": "input/corpus.md", "documents": documents, "unconverted": unconverted, "contract": contract}
+    if not parts and not visual:
+        sys.exit("no document in %s could be read" % folder)
+    (dest / "corpus.md").write_text("\n".join(parts) or "(no document had a text copy; read the documents listed under visual)\n")
+    return {"corpus": "input/corpus.md", "documents": documents, "unconverted": unconverted, "visual": visual, "contract": contract}

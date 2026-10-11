@@ -18,7 +18,7 @@ def gate(n, work, seen):
         m = json.load(open(work / "inputs.json"))
         if m.get("mode") == "final":      # the agent writes topics.json itself from the test customers
             reads = [r for r in reads if r != "topics.json"]
-        reads += [m["brief"]] + ([m["tools"]] if m.get("tools") else [])
+        reads += [m["brief"]] + ([m["tools"]] if m.get("tools") else []) + ["original/" + v for v in m.get("visual", [])]
     bad = [f"you have not read {p} in this phase" for p in reads if p.lower() not in seen]
     if n == 0:
         out = subprocess.run([sys.executable, "tools/check_rules.py"], cwd=work, capture_output=True, text=True).stdout

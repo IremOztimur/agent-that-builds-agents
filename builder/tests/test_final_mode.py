@@ -20,7 +20,7 @@ out = pathlib.Path(tempfile.mkdtemp())
 info = intake.ingest_folder(d, out)
 corpus = (out / "corpus.md").read_text()
 assert info["documents"][:2] == ["BRIEF.md", "README.md"], info["documents"]          # the order the case folder asks for
-assert info["unconverted"] == ["flow.png"] and info["contract"] is None
+assert info["unconverted"] == ["flow.png"] and info["visual"] == ["flow.png"] and info["contract"] is None
 assert "Ödeme planı en fazla üç taksittir." in corpus and "Ayşe" in corpus and "İşlem sırası" in corpus, corpus
 
 # prepare: a folder and a mock URL
@@ -40,7 +40,7 @@ r = subprocess.run([sys.executable, "tools/check_rules.py"], cwd=w, capture_outp
 assert "FAIL" not in r, r
 rules[1]["source"] = "BRIEF.md"
 (w / "rules.json").write_text(json.dumps({"brief_lines": m["brief_lines"], "rules": rules}))
-assert "not a document without a text copy" in subprocess.run([sys.executable, "tools/check_rules.py"], cwd=w, capture_output=True, text=True).stdout
+assert "not a drawing, image or PDF" in subprocess.run([sys.executable, "tools/check_rules.py"], cwd=w, capture_output=True, text=True).stdout
 
 # expectations for a mock: calls, forbidden calls, state
 TOPICS = [{"id": "T1", "script": "kimlik doğrular, ödeme planı ister", "variables": {"customer_id": "c1"}}]

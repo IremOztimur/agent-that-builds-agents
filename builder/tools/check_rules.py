@@ -60,8 +60,8 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
             bad.append("%s: status %r not in %s" % (rid, r.get("status"), sorted(STATUS)))
         q = norm(str(r.get("quote", "")))
         if r.get("source"):
-            if r["source"] not in inputs.meta().get("unconverted", []):
-                bad.append("%s: source %r is not a document without a text copy (those are: %s)" % (rid, r["source"], inputs.meta().get("unconverted", [])))
+            if r["source"] not in inputs.meta().get("visual", []) + inputs.meta().get("unconverted", []):
+                bad.append("%s: source %r is not a drawing, image or PDF of the case (those are: %s)" % (rid, r["source"], inputs.meta().get("visual", []) + inputs.meta().get("unconverted", [])))
             elif not r.get("note"):
                 bad.append("%s: a rule from %s (no text copy) needs a note saying what the document shows" % (rid, r["source"]))
         elif q and q not in brief:

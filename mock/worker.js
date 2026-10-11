@@ -7,6 +7,7 @@
 //   POST /_reset/<id>        -> clears the ledger of that customer
 //   POST <a tool path>       -> handlers[path]; the call, its result and the state patch are recorded under body.customer_id
 import customers from "./customers.json";
+import routes from "./routes.json";
 import { handlers } from "./handlers.js";
 
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
@@ -30,6 +31,21 @@ export class Ledger {
 const stub = (env, id) => env.LEDGER.get(env.LEDGER.idFromName(String(id)));
 const ask = (env, id, path, body) => stub(env, id).fetch("https://ledger" + path, { method: body ? "POST" : "GET", body: body ? JSON.stringify(body) : undefined }).then((r) => r.json());
 
+// A route in routes.json needs no code: {"tool": "name", "state": {"cutoffWeek": "week"}, "unknown": {"status": 404, "body": {...}}}.
+// The answer is the customer's own, from customers.json: customer.answers[path] = {"status": 200, "body": {...}}, or, when the answer depends on a
+// field of the request, {"by": "cardId", "cases": {"<value>": {"status", "body"}}, "default": {"status", "body"}}.
+// `state` copies request fields onto the ledger's state (what the call changed), so the scorer can see it.
+function dataDriven(route, path) {
+  return async ({ body, customer }) => {
+    let a = customer && customer.answers && customer.answers[path];
+    if (a && a.by) a = (a.cases || {})[body[a.by]] || a.default;
+    if (!a) a = route.unknown || { status: customer ? 404 : 404, body: { ok: false, error: customer ? "no answer for this request" : "customer not found" } };
+    const state = {};
+    if (a.status === undefined || a.status < 400) for (const [k, field] of Object.entries(route.state || {})) if (body[field] !== undefined) state[k] = body[field];
+    return { tool: route.tool, result: a.body, status: a.status || 200, state };
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -38,7 +54,7 @@ export default {
     if (url.pathname === "/_health") return json({ ok: true });
     if (parts[0] === "_ledger" && parts[1]) return json(await ask(env, parts[1], "/get"));
     if (parts[0] === "_reset" && parts[1]) return json(await ask(env, parts[1], "/reset", {}));
-    const handler = handlers[url.pathname];
+    const handler = handlers[url.pathname] || (routes[url.pathname] && dataDriven(routes[url.pathname], url.pathname));
     if (!handler) return json({ ok: false, error: "unknown route " + url.pathname }, 404);
     const body = request.method === "POST" ? await request.json().catch(() => ({})) : Object.fromEntries(url.searchParams);
     // the customer's id: the field the contract uses for it (add its name here), or a header
