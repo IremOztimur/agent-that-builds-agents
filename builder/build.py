@@ -1,9 +1,9 @@
 """The builder: reads a bank brief and its tool API file, creates the phone agent on Freya. No manual step.
 
-    python3 builder/build.py <brief.md> <tools.json> [--slot NAME] [--minutes 27] [--prepare-only]
+    python3 builder/build.py <brief.md> <tools.json> [--slot NAME] [--cases A|B] [--minutes 27] [--prepare-only]
 
 One Claude Agent SDK session works in a clean temporary folder that holds only the brief, the tool API file, the platform
-docs, the example agent and the helper tools. Three skills (read-brief, compose-workflow, test-and-repair) guide it.
+docs, the example agent, the practice customers of the brief (A or B) and the helper tools. Three skills (read-brief, compose-workflow, test-and-repair) guide it.
 The harness, not the agent, does the final lint, publish into the slot, export and trace. Needs FREYA_API_KEY and a
 Claude login (or ANTHROPIC_API_KEY); BUILDER_MODEL picks the model.
 """
@@ -13,15 +13,16 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUILDER = ROOT / "builder"
 KIT = ROOT / "build-the-builder_pack"
 SKILLS = ["read-brief", "compose-workflow", "test-and-repair"]
-EVIDENCE = ["rules.json", "design.md", "tests.json", "repairs.md", "disputed.md", "report.md", "vars.json"]
+EVIDENCE = ["rules.json", "design.md", "repairs.md", "report.md", "scores.json"]
 
 PROMPT = """Build a phone agent for the bank brief in brief.md, using the tool API in tools.json.
 Use the skills in this order: read-brief, compose-workflow, test-and-repair. Work only with the files in this folder.
-The final workflow must be in workflow.json and published with tools/publish.py. You have {minutes} minutes in total; do
-not start a step you cannot finish. Finish with one line: the workflow_id, the agent_id, and how many tests passed."""
+The practice customers for this brief are the cases of brief {cases} in public-test-set.json. The final workflow must be in
+workflow.json and published with tools/publish.py. You have {minutes} minutes in total (tools/clock.py shows what is left);
+do not start a step you cannot finish. Finish with one line: the workflow_id, the agent_id, and how many customers passed."""
 
 
-def prepare(brief, api, slot):
+def prepare(brief, api, slot, cases):
     work = pathlib.Path(tempfile.mkdtemp(prefix="builder-"))
     shutil.copy(brief, work / "brief.md")
     shutil.copy(api, work / "tools.json")
@@ -32,6 +33,13 @@ def prepare(brief, api, slot):
     shutil.copy(KIT / "examples" / "base-agent.json", work / "examples" / "base-agent.json")
     shutil.copy(KIT / "freya.py", work / "freya.py")
     shutil.copytree(BUILDER / "tools", work / "tools", ignore=shutil.ignore_patterns("__pycache__"))
+    for f in ("run_cases.py", "score.py"):
+        shutil.copy(KIT / "tools" / f, work / "tools" / f)
+    shutil.copy(KIT / "public-test-set.json", work / "public-test-set.json")
+    personas = BUILDER / ".personas.json"           # persona ids are reused across builds so the workspace does not fill up
+    shutil.copy(personas if personas.exists() else KIT / ".personas.json", work / ".personas.json")
+    for d in ("versions", "results"):
+        (work / d).mkdir()
     for s in SKILLS:
         shutil.copytree(BUILDER / "skills" / s, work / ".claude" / "skills" / s)
     return work
@@ -47,18 +55,18 @@ class Trace:
         self.f.flush()
 
 
-async def run_agent(work, slot, minutes, trace):
+async def run_agent(work, slot, minutes, cases, trace):
     from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, TextBlock, ToolUseBlock, query
     model = os.environ.get("BUILDER_MODEL", "claude-opus-5-5")
     options = ClaudeAgentOptions(
         cwd=work, model=model, skills=SKILLS, setting_sources=["project"],
         allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"], permission_mode="dontAsk", max_turns=150,
         env={"BASH_DEFAULT_TIMEOUT_MS": "900000", "BASH_MAX_TIMEOUT_MS": "1200000", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
-             "BUILDER_SLOT": slot, "BUILDER_SLOT_STATE": str(BUILDER / ".slots.json")})
+             "BUILDER_SLOT": slot, "BUILDER_SLOT_STATE": str(BUILDER / ".slots.json"), "BUILDER_DEADLINE": str(time.time() + minutes * 60)})
     trace.line("model", "builder model %s" % model)
 
     async def go():
-        async for m in query(prompt=PROMPT.format(minutes=minutes), options=options):
+        async for m in query(prompt=PROMPT.format(minutes=minutes, cases=cases), options=options):
             if isinstance(m, AssistantMessage):
                 uses = [b for b in m.content if isinstance(b, ToolUseBlock)]
                 texts = [b.text for b in m.content if isinstance(b, TextBlock)]
@@ -66,7 +74,7 @@ async def run_agent(work, slot, minutes, trace):
                 trace.line("model", "%s: %s" % (getattr(m, "model", model), purpose))
                 for b in uses:
                     cmd = str(b.input.get("command", ""))
-                    if any(k in cmd for k in ("run_tests", "chat.py", "check_rules", "lint.py", "publish.py")):
+                    if any(k in cmd for k in ("run_cases", "show_failures", "check_rules", "lint.py", "publish.py", "run_code")):
                         trace.line("selftest", cmd[:200])
             elif isinstance(m, ResultMessage):
                 trace.line("done", "%d turns, %.0f s, $%.2f" % (m.num_turns, m.duration_ms / 1000, m.total_cost_usd or 0))
@@ -96,6 +104,8 @@ def finalize(work, slot, trace):
     for e in EVIDENCE:
         if (work / e).exists():
             shutil.copy(work / e, out / slot / e)
+    if (work / ".personas.json").exists():
+        shutil.copy(work / ".personas.json", BUILDER / ".personas.json")
     trace.line("freya", "workflow_id=%s agent_id=%s nodes=%d tools=%d" % (
         r["workflow_id"], r["agent_id"], len(wf["nodes"]), sum(len(n.get("tools", [])) for n in wf["nodes"].values())))
     return r
@@ -108,7 +118,8 @@ def main(argv):
     opt = {argv[i]: argv[i + 1] for i in range(2, len(argv) - 1) if argv[i].startswith("--")}
     slot = opt.get("--slot") or pathlib.Path(brief).stem
     minutes = int(opt.get("--minutes", 27))
-    work = prepare(brief, api, slot)
+    cases = opt.get("--cases", "A")
+    work = prepare(brief, api, slot, cases)
     if "--prepare-only" in argv:
         print(work)
         return
@@ -116,7 +127,7 @@ def main(argv):
     trace = Trace(ROOT / "traces" / ("%s-%s.log" % (slot, time.strftime("%Y%m%d-%H%M%S"))))
     trace.line("input", "brief=%s tools=%s slot=%s workdir=%s" % (brief, api, slot, work))
     try:
-        asyncio.run(run_agent(work, slot, minutes, trace))
+        asyncio.run(run_agent(work, slot, minutes, cases, trace))
     finally:
         r = finalize(work, slot, trace)
         trace.line("end", time.strftime("%Y-%m-%dT%H:%M:%S%z"))

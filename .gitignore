@@ -14,3 +14,4 @@ eval/out/
 builder/.slots.json
 traces/
 submission/*/
+builder/.personas.json

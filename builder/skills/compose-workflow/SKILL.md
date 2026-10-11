@@ -24,7 +24,7 @@ The smallest workflow that works: at most about 600 lines pretty-printed, usuall
 - **Write guard.** Every tool that writes gets a `pre_process_code` hook that checks the request against the computed limits and blocks an invalid one by setting `config['url'] = ''`. A `post_process_code` hook writes a state string to `vars` (recorded, failed, blocked) and adds a `what_to_do_next` line to `result['data']` that says what to tell the customer.
 - **Counters in code.** Attempts, "only once" offers and per-item progress live in `vars` (hooks or code nodes) and are read by transitions or injected into the prompt. A prompt alone does not count reliably.
 - **Closing.** The last call must match what was recorded: decide outcome and reason in the closing tool's pre hook from `vars`, not from the model's choice. Exactly one closing call, last.
-- **Fixed sentences.** The opening and required sentences are `on_enter` tts text. (The chat test route does not speak the first node's opening; real calls do.)
+- **Fixed sentences.** The opening and required sentences are `on_enter` tts text.
 - **Interrupts valid anywhere** (robot question, scam question, unknown fact): short rules in `system_prompt`, or a global node.
 
 ## 4. Platform rules that bite
@@ -33,4 +33,4 @@ Tool descriptions say WHEN to call ("CALL it every time ..."). After every tool 
 
 ## 5. Finish
 
-Write `workflow.json`. Run `python3 tools/lint.py workflow.json tools.json`, then `python3 tools/publish.py workflow.json`. Fix until both are clean, including any `READBACK` line (the platform silently dropped something). Then continue with the test-and-repair skill.
+Write `workflow.json`. Run `python3 tools/lint.py workflow.json tools.json`, then `python3 tools/publish.py workflow.json`. Fix until both are clean, including any `READBACK` line (the platform silently dropped something). Then continue with the test-and-repair skill, which runs the practice customers against the published agent.

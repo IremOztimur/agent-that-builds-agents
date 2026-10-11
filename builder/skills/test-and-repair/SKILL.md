@@ -1,36 +1,41 @@
 ---
 name: test-and-repair
-description: Test the composed workflow against the rules without any bank customers (expectations written from rules.json first, local code tests, chat smoke up to the identity gate), tag every failure by cause, and repair in one bounded round.
+description: Run the practice customers against the published agent, read the bank's ledger and the judge's verdict, tag each failure by cause, and repair the workflow in bounded rounds without regressions. Use after compose-workflow.
 ---
 
-# Test and repair
+# Test and repair on the practice customers
 
-There are no customers for this brief. Test what can be tested without them, honestly, and report what could not be.
+`public-test-set.json` holds the practice customers for this brief. `tools/run_cases.py` plays each one against your published agent in text. A customer passes only if all three hold: the bank's ledger is right (outcome, promises, notes, callbacks, transfers), the conversation stayed inside the brief, and the agent told the truth. The ledger comes from the bank, never from what the agent said. There is no partial credit, and one green run is a hint, not proof.
 
-## 1. Expectations first
+## The loop
 
-Before you read the workflow's code again, write `tests.json` from `rules.json` only: a list of
-`{"rule": "r07", "name": "...", "target": "<node or tool name>", "hook": "pre|post|none", "vars": {}, "params": {}, "config": {}, "result": {}, "expect": {"vars.x": "value", "config.url": ""}}`.
-For every live gate, calc and state rule write at least a passing case, a boundary case (exactly on the limit, one step beyond it) and a case that must be blocked. Work the expected values out by hand from the quote, not from what the code prints.
-Run: `python3 tools/run_tests.py tests.json workflow.json`.
+0. `python3 tools/clock.py` shows the minutes left. Never start a run you cannot finish: ten customers take about 3 to 6 minutes. Keep the last 5 minutes free.
+1. **Publish and save.** `python3 tools/publish.py workflow.json` prints the `agent_id`. Copy the file to `versions/v1.json`.
+2. **Run.** In the foreground, and wait for it to end: `python3 tools/run_cases.py <agent_id> --brief <A or B> --out results/r1.json`. Add the result to `scores.json` (version, passed ids, failed ids).
+3. **Re-run failures once** with `--only ID,ID --out results/r1b.json`. The simulated customer and the judge are models and vary between runs. A customer that passes on the second run is noise, not a bug; note it.
+4. **Read every real failure.** `python3 tools/show_failures.py results/r1.json` prints the ledger difference, the judge's full reason, and the transcript with every tool call and routing step.
+5. **Tag by cause, then group.** Many failures share one cause; fix the cause once.
+   - `RULE_MISSED`: the brief has a rule, the workflow has no mechanism for it
+   - `RULE_WRONG`: the rule was misread; re-read its quote in `rules.json`
+   - `NOT_ENFORCED`: a gate, calculation or counter rule that exists only as prompt text, and the model broke it
+   - `STATE`: a counter, an order, or a "once only" is wrong or lost between steps
+   - `SPEECH`: wording wrong, leaked, or a required sentence missing or said too early
+   - `NLU`: the model misunderstood the customer (a date in words, a correction, a number in two parts)
+   - `STALL`: no reply after a tool result, a loop, or the customer hung up after a long silence
+   - `PLATFORM`: something silently dropped, a timeout, a deadlock
+   - `JUDGE_NOISE`: the judge objects to something the brief itself requires or to a harmless detail
+   Write each group to `repairs.md`: tag, the brief rule (id and quote), the cause in one sentence, the change and the layer it lands in.
+6. **Repair at the layer the tag names.**
+   - A fix is a rule about calls that holds for every customer, product, amount and date. State it that way in `repairs.md`.
+   - Never put a customer id, name, amount or date from the practice set into the workflow. The practice customers show that the brief was misread or enforced too weakly. They are not the specification. Re-read the brief rule and implement it completely.
+   - `NOT_ENFORCED` is fixed by moving the rule into structure or code (a gate, a code node, a hook), not by more prompt text.
+7. **No regressions.** Publish the repaired workflow, save it as `versions/vN.json`, rerun all customers, update `scores.json`. Keep the change only if the targeted failures are fixed and nothing that passed before now fails. Otherwise copy the previous version back to `workflow.json`, publish it again, and note why in `repairs.md`.
+8. **Stop** when everything passes twice in a row, after three repair rounds, or when `tools/clock.py` shows under 6 minutes.
 
-## 2. Conversation smoke (up to the first bank answer)
+## Finish
 
-Make `vars.json` with invented call variables (customer id, names, `now` as the brief describes). The bank refuses unknown customers, so these tests cover the opening and identity stage only. Publish, then use `python3 tools/chat.py vars.json "msg" ...` for: the opening; someone else answering; the customer refusing to answer; a wrong answer; asking for the amount before identity is verified. Read the events: the protected tool must never be called, and nothing from behind the gate may be said.
+Copy the best-scoring version (fewest failures, latest on a tie) to `workflow.json` and publish it. Write `report.md`: the score of each version, the failure groups with their tags, what still fails and why. Print one line: the `workflow_id`, the `agent_id`, and the passed/total of the best version.
 
-## 3. Tag every failure by cause
+## Debug helper
 
-`RULE_MISSED` (brief text with no rule or mechanism) | `RULE_WRONG` (misread: re-read the quote) | `NOT_ENFORCED` (a gate, calc or state rule that is only prompt text) | `STATE` (counter or order wrong) | `SPEECH` (wrong or leaked wording) | `NLU` (model misread the customer) | `PLATFORM` (silent drop, timeout, deadlock) | `TEST_WRONG` (expectation contradicts the quote) | `JUDGE_NOISE`.
-Log each in `repairs.md`: tag, rule id, quote, the change.
-
-## 4. Repair rules
-
-- One round. Change the workflow at the layer the tag names, citing the quote.
-- State every fix as a rule about the call, never about one scenario's words or numbers.
-- Never edit `tests.json` to make a test pass. If you believe an expectation is wrong, write it to `disputed.md` with both quotes and keep the stricter behaviour.
-- After the repair rerun everything: keep the change only if the target failure is fixed and nothing that passed before broke; otherwise revert it.
-- Re-run lint and publish after the last change.
-
-## 5. Report
-
-Write `report.md`: rules enforced by structure, code, prompt only, not enforced; tests run and passed; what could not be tested (everything behind the identity gate in chat). Then print one line: `workflow.json` final, ids, tests passed/total.
+`python3 tools/run_code.py workflow.json <node-or-tool name> '{"var": "value"}'` runs one code snippet of your workflow locally with the variables you give (`--hook pre|post` for a tool's hooks), so you can check a calculation without a full run.
