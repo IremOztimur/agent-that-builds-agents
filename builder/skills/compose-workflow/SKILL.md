@@ -5,17 +5,19 @@ description: Phase 1. Build and publish workflow.json from rules.json, following
 
 # Phase 1: compose the workflow
 
-Read completely before designing: `docs/workflow-format.md`, `docs/tools-and-code.md`, `examples/base-agent.json`. They are the format: follow them, do not guess. Every value comes from `rules.json` or the tool API.
+Read completely before designing: `docs/workflow-format.md`, `docs/tools-and-code.md`, `examples/base-agent.json`. They are the format: follow them, do not guess. Every value comes from `rules.json` or the tool API. The model in a node sees only that node's prompt, so a node is the policy that is in force.
 
-1. Write `design.json`: `{"rows": [{"rules": ["r1", "r2"], "mechanism": "structure|code|prompt", "where": "<a node, tool or hook of workflow.json>"}]}`, covering every live rule. gate, calc and state rules, and every rule that names a number or a count (once, twice, attempts, times), must be `structure` or `code`, never `prompt`. Phase 1 does not pass otherwise.
-2. Keep it small: about 600 lines, 4 to 8 nodes.
+1. Write `design.json`: `{"rows": [{"rules": ["r1", "r2"], "mechanism": "structure|code|prompt", "where": "<a node, tool or hook of workflow.json>"}]}`, covering every live rule. By `kind`: gate, limit and allowed_set rules, and every rule that names a number or a count, are `structure` or `code`, never `prompt`. A `wording` rule puts its `wording` into the workflow exactly as the brief has it. A prompt row names its node (or system_prompt). Phase 1 does not pass otherwise.
+2. Keep it small: at most 1000 lines, 4 to 8 nodes, at most 8 prompt-only rules per node. More rules than that: split the node by state, or settle them in code and show the model the conclusion.
 3. Decisions that matter (the docs explain how):
    - numbers are flow, not wording: limits, windows, deadlines, amounts and every counter are computed and held in code, and transitions branch on them
+   - interdependent rules are settled in code: one code node derives the situation (stage, allowed set, deadline, attempts left) as variables; the prompt shows these facts, never the interplay of rules
+   - each conversation node's `task_message` is its role, the situation facts (`{{vars}}`) and the policy of that node only: what may and may not be done, what must be conveyed and before what. Context and policy, not a script. `loop_prompt` repeats the policy and what is collected. Rules that hold everywhere are a few lines in `system_prompt`
    - gate: a protected tool exists only in nodes reached through a transition on the bank's own answer
-   - facts: one code node computes dates, limits and amounts as text; the model never calculates
-   - writes: a pre hook validates the request and blocks an invalid one by setting `config['url'] = ''` (the platform then answers "Missing required field: url" and sends nothing); never raise. A post hook records state and adds `what_to_do_next`. `maxRetries` 0
-   - counters live in `vars`, changed only by code, never by the prompt: the engine's `_failure_count`, `{{node.total_turns}}`, or your own. To count something the model does (an offer made, an attempt, a question asked), give it a `code_exec` report tool: its arguments arrive in `params`, the code updates the counter and writes the next allowed line into `vars`, the prompt prints it, and a transition branches on the counter
-   - a rule that limits what the agent may offer or say (attempts, offers, asks) is enforced by code owning the line: the report tool returns the exact next line, or "no further offer", the prompt says it verbatim, and the model never composes the offer itself
+   - customer intent enters through `extraction_schema` enum slots and transitions on them. A tool the model calls reports facts the code needs; its name and arguments never state an outcome the code then decides
+   - writes: a pre hook validates the request and blocks an invalid one by setting `config['url'] = ''` (the platform then answers "Missing required field: url" and sends nothing); never raise. A post hook records state and returns facts and what is now allowed or forbidden, not a sentence to speak. `maxRetries` 0
+   - counters live in `vars`, changed only by code, never by the prompt: the engine's `_failure_count`, `{{node.total_turns}}`, or your own
+   - a rule that limits what the agent may offer (attempts, offers, asks): code computes the allowed set and what is left, the prompt shows it as a constraint ("allowed: ...; nothing else"), a transition ends the stage when none is left
    - close: the lifecycle `end_of_call` close tool, outcome and reason from `vars`; hang up with `end_call`
    - every conversation node gets `max_node_turns` and a `max_turn_transition`
 4. `python3 tools/lint.py workflow.json`, then `python3 tools/publish.py workflow.json`.

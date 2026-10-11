@@ -4,6 +4,8 @@ import json, re
 LIVE = ("decided", "proposed", "unresolved")
 HARD = ("gate", "calc", "state")
 COUNTED = re.compile(r"\d|\b(once|twice|thrice|times|attempts?)\b", re.I)
+DENSITY = 8        # most prompt-only rules the model is shown in one node
+SIZE = 1000        # most lines of workflow.json (indent 2)
 
 
 def check(work):
@@ -29,12 +31,44 @@ def check(work):
             bad.append("design row %s: `where` names no node or tool of workflow.json" % (row.get("rules") or row.get("rule")))
         for rid in row.get("rules", []) + ([row["rule"]] if row.get("rule") else []):
             row_of[rid] = row
+    shown = {}                                       # node -> live rules that only the prompt of that node carries
+    text = _norm(" ".join(_strings(wf)))
     for r in rules:
         if r.get("status") not in LIVE:
             continue
         row = row_of.get(r["id"])
         if row is None:
             bad.append("rule %s has no row in design.json" % r["id"])
-        elif row["mechanism"] == "prompt" and (r.get("class") in HARD or COUNTED.search(r.get("quote", ""))):
+            continue
+        if row["mechanism"] == "prompt" and (r.get("class") in HARD or r.get("kind") in ("gate", "limit", "allowed_set") or COUNTED.search(r.get("quote", ""))):
             bad.append("rule %s (%s) is prompt-only but is a hard rule: limits, windows, amounts and every counter must be structure or code" % (r["id"], r.get("class")))
+        if row["mechanism"] == "prompt":
+            nodes = [n for n in wf["nodes"] if n in str(row.get("where", ""))]
+            if not nodes and "system prompt" not in str(row.get("where", "")).lower().replace("_", " "):
+                bad.append("rule %s is carried by a prompt but `where` names neither a node of workflow.json nor system_prompt" % r["id"])
+            for n in nodes:
+                shown.setdefault(n, []).append(r["id"])
+        if r.get("kind") == "wording" and _norm(r.get("wording", "")) not in text:
+            bad.append("rule %s mandates exact wording, which is not in workflow.json: %r" % (r["id"], str(r.get("wording"))[:80]))
+    for n, ids in shown.items():
+        if len(ids) > DENSITY:
+            bad.append("node %s shows the model %d rules (%s); at most %d: split the node by state, or settle the interplay in code and show conclusions" % (n, len(ids), ", ".join(ids), DENSITY))
+    lines = len(json.dumps(wf, indent=2).splitlines())
+    if lines > SIZE:
+        bad.append("workflow.json is %d lines (indent 2); the limit is %d. Remove nodes or prompt text that no rule needs" % (lines, SIZE))
     return bad
+
+
+def _norm(s):
+    return re.sub(r"\s+", " ", str(s)).strip().lower()
+
+
+def _strings(x):
+    if isinstance(x, str):
+        yield x
+    elif isinstance(x, dict):
+        for v in x.values():
+            yield from _strings(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from _strings(v)
