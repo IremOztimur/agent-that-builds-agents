@@ -27,7 +27,7 @@ def best_measured(work, trace):
     return chosen
 
 
-def finalize(work, slot, trace):
+def finalize(work, slot, trace, existed=None):
     sys.path.insert(0, str(KIT)); sys.path.insert(0, str(BUILDER / "tools"))
     import freya, lint
     if not (work / "workflow.json").exists():
@@ -42,9 +42,8 @@ def finalize(work, slot, trace):
     trace.line("lint", "%d lines, %d nodes, %s" % (lines, len(wf["nodes"]), "clean" if not bad else "FAILED: " + "; ".join(bad)[:300]))
     if bad:
         return None
-    known = json.load(open(SLOTS)).get(slot) if SLOTS.exists() else None
     r = freya.save_workflow(slot, wf, state_file=str(SLOTS))
-    trace.line("freya", "slot %s: %s" % (slot, "updated in place (an earlier build of this slot existed)" if known else "created new, first build of this slot"))
+    trace.line("freya", "slot %s: %s" % (slot, "updated in place (this slot already existed when the run started)" if existed else "created new (no such slot when the run started)"))
     out = ROOT / "submission"
     shutil.rmtree(out / slot, ignore_errors=True)       # no stale evidence from an earlier run
     (out / slot / "results").mkdir(parents=True, exist_ok=True)

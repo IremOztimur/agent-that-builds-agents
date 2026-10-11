@@ -17,7 +17,7 @@ sys.path.insert(0, str(WORK))
 sys.path.insert(0, str(SEALED)); sys.path.insert(0, str(SEALED / "tools"))
 import freya, run_cases, score
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import stoprule
+import oracle, stoprule
 
 MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 
@@ -35,6 +35,8 @@ def parts(failed):
             out.append(("judge inconclusive (read its reason in `show`; run this customer once more with --only)", ""))
         elif f.startswith("conversation: [unfinished]"):
             out.append(("call did not finish in time (platform slow, or the agent never closed; run it once more with --only)", ""))
+        elif f.startswith("conversation: [wording]"):
+            out.append(("conversation: mandated wording never said", f.split("]", 1)[1].strip()))
         elif f.startswith("conversation:"):
             out.append(("conversation", ""))
         elif f.startswith("outcome"):
@@ -178,6 +180,31 @@ def collect(sim_id, want, limit):
     return runs
 
 
+def scored_cases(cases):
+    """The customers as they are scored. Normally the expectations the agent derived from rules.json decide what the bank must show
+    and the judge must find. In dev mode (inputs.json "dev") the known expected values decide, and the derived expectations are
+    compared with them: the parts that differ are named, never the values."""
+    try:
+        exp = json.load(open(WORK / "expectations.json"))
+    except Exception as e:
+        sys.exit("expectations.json cannot be read (%s). Write it from rules.json first (read-brief step 6)." % e)
+    missing = [c["id"] for c in cases if c["id"] not in exp]
+    if missing:
+        sys.exit("expectations.json has no entry for %s" % ", ".join(missing))
+    if json.load(open(WORK / "inputs.json")).get("dev"):
+        off = {c["id"]: oracle.mismatch(exp[c["id"]], c["expected"]) for c in cases}
+        bad = {k: v for k, v in off.items() if v}
+        print("oracle: your expectations match for %d of %d customers%s" % (len(cases) - len(bad), len(cases), "".join("\n  %s: %s differ(s)" % (k, ", ".join(v)) for k, v in bad.items())))
+        event("oracle", "%d of %d derived expectations match the known ones; differ: %s" % (len(cases) - len(bad), len(cases), bad or "none"))
+        return {c["id"]: c for c in cases}, exp
+    return {c["id"]: {**c, "expected": oracle.to_expected(exp[c["id"]]), "checks": oracle.checks(exp[c["id"]])} for c in cases}, exp
+
+
+def spoken(call_id):
+    """Everything the agent said in one call."""
+    return " ".join(m["message"] for m in freya.get_call(call_id)["messages"] if m["role"] == "assistant") if call_id else ""
+
+
 def run(argv):
     agent, rest = argv[0], argv[1:]
     opt = {rest[i]: rest[i + 1] for i in range(len(rest) - 1) if rest[i].startswith("--")}
@@ -185,6 +212,9 @@ def run(argv):
     cases = [c for c in json.load(open(SEALED / "public-test-set.json"))
              if (opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
     scope = [c["id"] for c in cases]
+    scored, derived = scored_cases(cases)
+    cases = [scored[i] for i in scope]
+    rules = json.load(open(WORK / "rules.json"))["rules"]
     only = opt["--only"].split(",") if opt.get("--only") else None
     if only is None or set(only) >= set(scope):
         stop = stoprule.verdict(rounds(), scope)
@@ -205,6 +235,9 @@ def run(argv):
             res["failed"].append("conversation: [unfinished] the call did not finish in time")
         elif r.get("outcome") != "pass":
             res["failed"].append("conversation: [%s] %s" % (r.get("outcome"), " ".join(str(r.get("reason") or "no verdict").split())[:500]))
+        missed = oracle.wording_misses(derived[c["id"]], rules, spoken(r.get("callId")))
+        if missed:
+            res["failed"].append("conversation: [wording] rules " + ", ".join(missed))
         rows.append({"id": c["id"], "level": c["level"], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),
                      "tools": [x["tool"] for x in led["calls"]], "customer_id": sessions[c["id"]]["customer_id"]})
     n = sum(x["pass"] for x in rows)

@@ -1,9 +1,9 @@
 """Phase 0 -> 1 -> 2 in one agent session. After each phase its gate must pass; a failed gate sends the problems back into the same
 conversation once. A phase never starts before the previous gate passed."""
-import asyncio, time
+import asyncio, json, time
 
 from . import agent, finalize, phases, workdir
-from .paths import ROOT
+from .paths import ROOT, SLOTS
 from .trace import Trace
 
 
@@ -32,22 +32,24 @@ async def run_phases(work, slot, deadline, trace):
     return True
 
 
-def build(brief, api, slot, cases, minutes, prepare_only=False, fresh=False):
+def build(brief, api, slot, cases, minutes, prepare_only=False, fresh=False, dev=False):
     slot = "%s-%s" % (slot, time.strftime("%m%d-%H%M%S")) if fresh else slot
-    work = workdir.prepare(brief, api, cases)
+    work = workdir.prepare(brief, api, cases, dev)
     if prepare_only:
         return work, None
     (ROOT / "traces").mkdir(exist_ok=True)
     trace = Trace(ROOT / "traces" / ("%s-%s.log" % (slot, time.strftime("%Y%m%d-%H%M%S"))))
-    trace.line("input", "brief=%s tools=%s slot=%s cases=%s workdir=%s" % (brief, api, slot, cases, work))
+    trace.line("input", "brief=%s tools=%s slot=%s cases=%s dev=%s workdir=%s" % (brief, api, slot, cases, dev, work))
     left_over = [f for f in ARTIFACTS if (work / f).exists()]
     trace.line("clean", "workdir at start: %s; earlier artifacts present: %s" % (sorted(x.name for x in work.iterdir()), left_over or "none"))
     if left_over:
         raise SystemExit("not a clean start: %s" % left_over)
+    existed = bool(SLOTS.exists() and slot in json.load(open(SLOTS)))
+    trace.line("slot", "%s: %s at the start of the run" % (slot, "already exists on Freya, will be updated in place" if existed else "does not exist yet, will be created"))
     t0 = time.time()
     try:
         asyncio.run(run_phases(work, slot, t0 + minutes * 60, trace))
     finally:
-        result = finalize.finalize(work, slot, trace)
+        result = finalize.finalize(work, slot, trace, existed)
         trace.line("end", "%s, build time %.1f min" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), (time.time() - t0) / 60))
     return work, result

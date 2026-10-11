@@ -8,7 +8,7 @@ from .paths import BUILDER, KIT
 SKILLS = ["read-brief", "compose-workflow", "test-and-repair"]
 
 
-def prepare(brief, api, cases):
+def prepare(brief, api, cases, dev=False):
     text = intake.brief_text(brief)
     intake.check_tool_api(api)
     work = pathlib.Path(tempfile.mkdtemp(prefix="builder-"))
@@ -17,7 +17,7 @@ def prepare(brief, api, cases):
     (work / "input" / bname).write_text(text)
     shutil.copy(api, work / "input" / pathlib.Path(api).name)
     (work / "inputs.json").write_text(json.dumps({"brief": "input/" + bname, "tools": "input/" + pathlib.Path(api).name,
-                                                  "brief_lines": len(text.splitlines()), "cases": cases}))
+                                                  "brief_lines": len(text.splitlines()), "cases": cases, "dev": dev}))
     (work / "topics.json").write_text(json.dumps(topics(cases), indent=1))
     (work / "docs").mkdir()
     for d in ("workflow-format.md", "tools-and-code.md", "api.md"):
