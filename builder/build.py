@@ -17,7 +17,7 @@ EVIDENCE = ["rules.json", "design.md", "repairs.md", "report.md", "scores.json"]
 
 PROMPT = """Build a phone agent for the bank brief in brief.md, using the tool API in tools.json.
 Use the skills in this order: read-brief, compose-workflow, test-and-repair. Work only with the files in this folder.
-The practice customers for this brief are the cases of brief {cases} in public-test-set.json. The final workflow must be in
+The practice customers for this brief are run with tools/practice.py (brief {cases}); they show what happened, not what was expected. The final workflow must be in
 workflow.json and published with tools/publish.py. You have {minutes} minutes in total (tools/clock.py shows what is left);
 do not start a step you cannot finish. Finish with one line: the workflow_id, the agent_id, and how many customers passed."""
 
@@ -33,16 +33,25 @@ def prepare(brief, api, slot, cases):
     shutil.copy(KIT / "examples" / "base-agent.json", work / "examples" / "base-agent.json")
     shutil.copy(KIT / "freya.py", work / "freya.py")
     shutil.copytree(BUILDER / "tools", work / "tools", ignore=shutil.ignore_patterns("__pycache__"))
+    # The practice customers live in a sealed folder outside the workdir: the agent runs them through tools/practice.py
+    # and sees what happened, never the expected values or the customer scripts.
+    sealed = pathlib.Path(tempfile.mkdtemp(prefix="sealed-"))
+    (sealed / "tools").mkdir(); (sealed / "results").mkdir()
     for f in ("run_cases.py", "score.py"):
-        shutil.copy(KIT / "tools" / f, work / "tools" / f)
-    shutil.copy(KIT / "public-test-set.json", work / "public-test-set.json")
+        shutil.copy(KIT / "tools" / f, sealed / "tools" / f)
+    shutil.copy(KIT / "freya.py", sealed / "freya.py")
+    shutil.copy(KIT / "public-test-set.json", sealed / "public-test-set.json")
     personas = BUILDER / ".personas.json"           # persona ids are reused across builds so the workspace does not fill up
-    shutil.copy(personas if personas.exists() else KIT / ".personas.json", work / ".personas.json")
-    for d in ("versions", "results"):
-        (work / d).mkdir()
+    shutil.copy(personas if personas.exists() else KIT / ".personas.json", sealed / ".personas.json")
+    (work / "versions").mkdir()
+    (work / ".sealed").write_text(str(sealed))
     for s in SKILLS:
         shutil.copytree(BUILDER / "skills" / s, work / ".claude" / "skills" / s)
     return work
+
+
+def sealed_dir(work):
+    return pathlib.Path((work / ".sealed").read_text())
 
 
 class Trace:
@@ -62,7 +71,7 @@ async def run_agent(work, slot, minutes, cases, trace):
         cwd=work, model=model, skills=SKILLS, setting_sources=["project"],
         allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"], permission_mode="dontAsk", max_turns=150,
         env={"BASH_DEFAULT_TIMEOUT_MS": "900000", "BASH_MAX_TIMEOUT_MS": "1200000", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
-             "BUILDER_SLOT": slot, "BUILDER_SLOT_STATE": str(BUILDER / ".slots.json"), "BUILDER_DEADLINE": str(time.time() + minutes * 60)})
+             "BUILDER_SLOT": slot, "BUILDER_SLOT_STATE": str(BUILDER / ".slots.json"), "BUILDER_DEADLINE": str(time.time() + minutes * 60), "BUILDER_SEALED": str(sealed_dir(work))})
     trace.line("model", "builder model %s" % model)
 
     async def go():
@@ -74,7 +83,7 @@ async def run_agent(work, slot, minutes, cases, trace):
                 trace.line("model", "%s: %s" % (getattr(m, "model", model), purpose))
                 for b in uses:
                     cmd = str(b.input.get("command", ""))
-                    if any(k in cmd for k in ("run_cases", "show_failures", "check_rules", "lint.py", "publish.py", "run_code")):
+                    if any(k in cmd for k in ("practice.py", "check_rules", "lint.py", "publish.py", "run_code")):
                         trace.line("selftest", cmd[:200])
             elif isinstance(m, ResultMessage):
                 trace.line("done", "%d turns, %.0f s, $%.2f" % (m.num_turns, m.duration_ms / 1000, m.total_cost_usd or 0))
@@ -101,11 +110,14 @@ def finalize(work, slot, trace):
     out = ROOT / "submission"
     (out / slot).mkdir(parents=True, exist_ok=True)
     freya.export_workflow(r["workflow_id"], str(out / (slot + ".workflow.json")))
+    (out / slot / "results").mkdir(exist_ok=True)
+    for f in (sealed_dir(work) / "results").glob("*.json"):
+        shutil.copy(f, out / slot / "results" / f.name)
     for e in EVIDENCE:
         if (work / e).exists():
             shutil.copy(work / e, out / slot / e)
-    if (work / ".personas.json").exists():
-        shutil.copy(work / ".personas.json", BUILDER / ".personas.json")
+    if (sealed_dir(work) / ".personas.json").exists():
+        shutil.copy(sealed_dir(work) / ".personas.json", BUILDER / ".personas.json")
     trace.line("freya", "workflow_id=%s agent_id=%s nodes=%d tools=%d" % (
         r["workflow_id"], r["agent_id"], len(wf["nodes"]), sum(len(n.get("tools", [])) for n in wf["nodes"].values())))
     return r
