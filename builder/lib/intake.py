@@ -91,6 +91,101 @@ def read_text(p):
     return None
 
 
+OBLIG = re.compile(r"\b(must|never|always|only|shall|should|cannot|can't|do not|don't|not allowed|required|at most|at least|exactly|maximum|minimum|once|twice|three times|no more than|not more than|asla|mutlaka|yalnızca|sadece|gerekir|zorunlu|yasak|en fazla|en az)\b", re.I)
+CHANGE = re.compile(r"\b(correction|instead of|no longer|please build to|build to these|supersede[sd]?|replaces|won't show|doesn't show|not yet in|changed|decided|agreed|from now on|update:|rather than|not .{1,25}, but|yerine|artık|düzeltme|karar verildi)\b", re.I)
+OPEN = re.compile(r"\b(open point|not agreed|tbd|to confirm|unclear|no answer|not decided|to be decided|still open|undecided|no promises)\b", re.I)
+QUOTED = re.compile(r"[\"“]([^\"”]{18,200})[\"”]")
+TURN = re.compile(r"^\[(\d\d:\d\d:\d\d)\] ([^:]{2,40}): (.*)$")
+DATE_IN_NAME = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+
+def condense(text):
+    """A meeting transcript without its small talk: a turn is kept when it is long, has a number, a quote, or an obligation, change or open-point
+    word. Header lines stay. Returns (text, dropped turns)."""
+    out, dropped = [], 0
+    for line in text.splitlines():
+        m = TURN.match(line)
+        if not m:
+            out.append(line)
+            continue
+        who, said = m.group(2), m.group(3)
+        if len(said) >= 70 or re.search(r"\d", said) or '"' in said or OBLIG.search(said) or CHANGE.search(said) or OPEN.search(said):
+            out.append("%s: %s" % (who, said))
+        else:
+            dropped += 1
+    return "\n".join(out), dropped
+
+
+def doc_kind(rel, text):
+    n = rel.lower()
+    if sum(1 for l in text[:4000].splitlines() if TURN.match(l)) >= 3:        # timestamped speaker turns, whatever the file is called
+        return "meeting transcript"
+    for key, kind in (("contract", "service contract"), ("analysis", "analysis"), ("faq", "faq (public page)"), ("prompt", "phone-menu prompt sheet"),
+                      ("readme", "pack overview"), ("brief", "task brief"), ("test-customers", "test data")):
+        if key in n:
+            return kind
+    if "transcript" in n:
+        return "meeting transcript"
+    if re.match(r"(?m)^(From|To|Subject):", text[:600]):
+        return "e-mail thread"
+    return "document"
+
+
+def doc_date(rel, text):
+    m = DATE_IN_NAME.search(rel)
+    if m:
+        return m.group(1)
+    m = re.search(r"(?m)^Date:.*?(\d{1,2}) (\w{3}) (\d{4})", text[:800])
+    if m:
+        months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+        mm = months.index(m.group(2)[:3].lower()) + 1 if m.group(2)[:3].lower() in months else 0
+        if mm:
+            return "%s-%02d-%02d" % (m.group(3), mm, int(m.group(1)))
+    return "undated"
+
+
+def digest(corpus_text, docs):
+    """A map of the corpus for the agent: the documents newest first, and the lines (numbers in corpus.md) that change earlier text, leave a point open,
+    or hold quoted wording. Deterministic; it finds where to look, the agent decides what it means. docs: {rel: (kind, date)}."""
+    lines = corpus_text.splitlines()
+    cur, spans = None, {}
+    for i, line in enumerate(lines, 1):
+        m = re.match(r"=== FILE: (.*) ===$", line)
+        if m:
+            cur = m.group(1)
+            spans[cur] = [i, i]
+        elif cur:
+            spans[cur][1] = i
+    order = sorted(docs, key=lambda r: docs[r][1] if docs[r][1] != "undated" else "0000", reverse=True)
+    out = ["# Map of the corpus (made by code; line numbers are lines of corpus.md)", "",
+           "## Documents, newest first (read in this order; where documents disagree, the newer one wins unless it says otherwise)", "",
+           "| document | kind | date | lines |", "|---|---|---|---|"]
+    for rel in order:
+        a, b = spans.get(rel, (0, 0))
+        out.append("| %s | %s | %s | %d-%d |" % (rel, docs[rel][0], docs[rel][1], a, b))
+
+    def where(i):
+        for rel, (a, b) in spans.items():
+            if a <= i <= b:
+                return rel
+        return "?"
+
+    def pick(rx, limit):
+        found = []
+        for i, line in enumerate(lines, 1):
+            if line.startswith("=== FILE:") or len(line.strip()) < 25 or not rx.search(line):
+                continue
+            found.append((docs.get(where(i), ("", "undated"))[1], i, line.strip()))
+        found.sort(key=lambda t: (t[0] if t[0] != "undated" else "0000", -t[1]), reverse=True)
+        return ["- L%d (%s): %s" % (i, where(i).rsplit("/", 1)[-1], t[:170]) for _, i, t in found[:limit]]
+
+    for title, rx, limit in (("Lines that change or correct earlier text (newest first)", CHANGE, 50), ("Points left open", OPEN, 30)):
+        out += ["", "## " + title, ""] + (pick(rx, limit) or ["- none found"])
+    quoted = [(i, m.group(1)) for i, line in enumerate(lines, 1) for m in [QUOTED.search(line)] if m and not line.startswith("===")]
+    out += ["", "## Quoted wording (candidates for `wording` rules)", ""] + ["- L%d (%s): %s" % (i, where(i).rsplit("/", 1)[-1], q[:170]) for i, q in quoted[:60]]
+    return "\n".join(out) + "\n"
+
+
 def ingest_folder(folder, dest):
     """Copies a case folder into dest/original and writes dest/corpus.md: every document with a text copy, in reading order (BRIEF.md,
     README.md, then the rest by name), each under a `=== FILE: name ===` header. Documents with no text copy (images, PDFs that cannot be
@@ -105,6 +200,7 @@ def ingest_folder(folder, dest):
     dest = pathlib.Path(dest)
     (dest / "original").mkdir(parents=True, exist_ok=True)
     parts, documents, unconverted, visual, data, contract = [], [], [], [], [], None
+    docs_meta = {}
     for f in files:
         rel = str(f.relative_to(root))
         target = dest / "original" / rel
@@ -121,8 +217,15 @@ def ingest_folder(folder, dest):
             data.append(rel)
             head = "\n".join(text.strip().splitlines()[:25])
             parts.append("=== FILE: %s ===\n(data file, %d bytes, not copied here: open input/original/%s and look up what you need. It starts:)\n%s\n" % (rel, len(text), rel, head))
+            docs_meta[rel] = ("test data", doc_date(rel, text))
             continue
+        kind = doc_kind(rel, text)
+        if kind == "meeting transcript":
+            text, dropped = condense(text)
+            if dropped:
+                text += "\n(%d turns of small talk are left out here; the whole transcript is in input/original/%s)" % (dropped, rel)
         parts.append("=== FILE: %s ===\n%s\n" % (rel, text.strip()))
+        docs_meta[rel] = (kind, doc_date(rel, text))
         if f.suffix.lower() == ".json" and contract is None:
             try:
                 spec = json.loads(text)
@@ -132,5 +235,7 @@ def ingest_folder(folder, dest):
                 pass
     if not parts and not visual:
         sys.exit("no document in %s could be read" % folder)
-    (dest / "corpus.md").write_text("\n".join(parts) or "(no document had a text copy; read the documents listed under visual)\n")
+    corpus = "\n".join(parts) or "(no document had a text copy; read the documents listed under visual)\n"
+    (dest / "corpus.md").write_text(corpus)
+    (dest / "digest.md").write_text(digest(corpus, docs_meta))
     return {"corpus": "input/corpus.md", "documents": documents, "unconverted": unconverted, "visual": visual, "data": data, "contract": contract}

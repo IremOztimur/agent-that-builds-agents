@@ -66,4 +66,15 @@ big = pathlib.Path(tempfile.mkdtemp()) / "c"; big.mkdir()
 o2 = pathlib.Path(tempfile.mkdtemp()); info2 = intake.ingest_folder(big, o2)
 assert info2["data"] == ["records.json"] and len((o2 / "corpus.md").read_text().splitlines()) < 60, info2
 assert (o2 / "original" / "records.json").exists()
+# the digest: newest first, change lines found, transcripts without small talk
+tr = pathlib.Path(tempfile.mkdtemp()) / "c"; (tr / "sources").mkdir(parents=True)
+(tr / "BRIEF.md").write_text("task\n")
+(tr / "sources" / "2026-10-01-spec.md").write_text("The assistant must always read the due date.\n")
+(tr / "sources" / "2026-10-09-recap.txt").write_text("From: a\nDate: Fri, 9 Oct 2026 17:48:12 +0300\nSubject: x\n\nOne correction: three replies, not two. Please build to these.\n")
+(tr / "sources" / "2026-10-05-meeting.txt").write_text("\n".join(["[00:00:0%d] Ann: ok fine" % i for i in range(5)] + ["[00:01:00] Ann: Decided. Three silences, then hang up.", "[00:01:30] Bob: thanks"]))
+o3 = pathlib.Path(tempfile.mkdtemp()); intake.ingest_folder(tr, o3)
+dg, cp = (o3 / "digest.md").read_text(), (o3 / "corpus.md").read_text()
+assert dg.index("2026-10-09-recap") < dg.index("2026-10-05-meeting") < dg.index("2026-10-01-spec"), dg      # newest first
+assert "One correction" in dg and "Decided. Three silences" in dg, dg                                       # lines that change earlier text
+assert "ok fine" not in cp and "Decided. Three silences" in cp and "small talk are left out" in cp, cp      # the small talk is gone, the decision stays
 print("ok: final mode")
