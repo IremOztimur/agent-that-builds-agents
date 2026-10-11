@@ -1,0 +1,1173 @@
+{
+ "brief_lines": 148,
+ "rules": [
+  {
+   "id": "A-scope",
+   "quote": "Brief A: Freya Bank, early-stage collections, one product",
+   "stage": "scope",
+   "class": "flow",
+   "status": "decided",
+   "kind": "content",
+   "applies": "the customer has exactly one late product",
+   "note": "Brief A governs single-product customers; Brief B adds rules for one to three products."
+  },
+  {
+   "id": "A-job1",
+   "quote": "Freya Bank calls customers who are 1 to 45 days late on one product.",
+   "stage": "scope",
+   "class": "flow",
+   "status": "decided",
+   "kind": "content",
+   "applies": "every call"
+  },
+  {
+   "id": "A-job2",
+   "quote": "The agent finds the customer, checks identity, states the debt, gets a payment promise where it can, and closes the call with the correct outcome.",
+   "stage": "scope",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "every call",
+   "note": "Order of the call: reach the customer, verify, state debt, negotiate, close."
+  },
+  {
+   "id": "A-var0",
+   "quote": "Every call starts with these. Nothing else is known before the tools are called.",
+   "stage": "opening",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "before any tool call",
+   "note": "Product, amounts and days late are unknown until get_account."
+  },
+  {
+   "id": "A-var-id",
+   "quote": "`customer_id` | `c_4f2a...` | Pass it to every tool call.",
+   "stage": "opening",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "every tool call"
+  },
+  {
+   "id": "A-var-name",
+   "quote": "`first_name`, `last_name` | `Daniel`, `Reyes` | The person to ask for.",
+   "stage": "opening",
+   "class": "flow",
+   "status": "decided",
+   "kind": "content",
+   "applies": "opening"
+  },
+  {
+   "id": "A-var-title",
+   "quote": "`title` | `Mr` or `Ms` | Address the customer as title plus last name.",
+   "stage": "opening",
+   "class": "speech",
+   "status": "decided",
+   "kind": "style",
+   "applies": "whenever the customer is addressed"
+  },
+  {
+   "id": "A-var-now",
+   "quote": "`now` | `2026-10-14T11:00` | The current date and time. All date rules use this, never the real clock.",
+   "stage": "dates",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "every date or time calculation",
+   "note": "'today' is the date part of now; callbacks must be later than the time part."
+  },
+  {
+   "id": "A1a",
+   "quote": "First sentence: say you are a digital assistant calling from Freya Bank, and that the call is recorded.",
+   "stage": "opening",
+   "class": "speech",
+   "status": "decided",
+   "kind": "content",
+   "applies": "the first sentence of every call"
+  },
+  {
+   "id": "A1b",
+   "quote": "Do not say \"collections\", \"debt\", \"payment\" or the product before identity is verified. This applies to everyone, including relatives.",
+   "stage": "opening",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "until both security questions have passed, whoever is on the line"
+  },
+  {
+   "id": "A2",
+   "quote": "Ask \"Am I speaking with {title} {last_name}?\".",
+   "stage": "opening",
+   "class": "speech",
+   "status": "decided",
+   "kind": "wording",
+   "applies": "right after the opening sentence",
+   "wording": "Am I speaking with {title} {last_name}?"
+  },
+  {
+   "id": "A3a",
+   "quote": "Only \"yes\", \"that's me\", \"speaking\" or the customer's own name counts as confirmation. \"Hello\", \"go ahead\" and \"who is this\" do not.",
+   "stage": "opening",
+   "class": "flow",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "judging the reply to the who-is-on-the-line question"
+  },
+  {
+   "id": "A3b",
+   "quote": "Ask once more. If it is still unclear after the second ask, close as `not_reached` / `unclear`.",
+   "stage": "opening",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the reply did not confirm and did not show a third party",
+   "note": "At most two asks in total."
+  },
+  {
+   "id": "A3c",
+   "quote": "Answer a question from the customer first (rules 4 and 43). The ask that follows is the second ask.",
+   "stage": "opening",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer answers the name question with a question",
+   "depends_on": [
+    "A3b",
+    "A4",
+    "A43"
+   ]
+  },
+  {
+   "id": "A4",
+   "quote": "If the customer asks whether you are a robot or an AI, say that you are Freya Bank's digital assistant and continue.",
+   "stage": "any",
+   "class": "speech",
+   "status": "decided",
+   "kind": "content",
+   "applies": "at any point in the call, before or after verification"
+  },
+  {
+   "id": "A5a",
+   "quote": "Do not say why you are calling. Say nothing beyond the opening sentence of rule 1.",
+   "stage": "third_party",
+   "class": "gate",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "someone other than the customer answers",
+   "depends_on": [
+    "A1a",
+    "A1b"
+   ]
+  },
+  {
+   "id": "A5b",
+   "quote": "Ask when the customer can be reached.",
+   "stage": "third_party",
+   "class": "flow",
+   "status": "decided",
+   "kind": "content",
+   "applies": "someone other than the customer answers"
+  },
+  {
+   "id": "A6a",
+   "quote": "A callback is for today or the next business day, from 10:00 to 19:00, both included, and later than `now`.",
+   "stage": "third_party",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "a third party names a time for a callback",
+   "depends_on": [
+    "A-cal",
+    "A-var-now"
+   ]
+  },
+  {
+   "id": "A6b",
+   "quote": "Call `schedule_callback` with the date and the time, then close as `not_reached` / `callback`.",
+   "stage": "third_party",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the offered callback time is inside the window",
+   "note": "time as HH:MM, date as YYYY-MM-DD",
+   "depends_on": [
+    "A6a"
+   ]
+  },
+  {
+   "id": "A7",
+   "quote": "If the person offers a day or a time outside that window, ask once for another time. If that is also outside it, do not schedule. Close as `not_reached` / `no_callback`.",
+   "stage": "third_party",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the offered callback time is outside the window",
+   "depends_on": [
+    "A6a"
+   ]
+  },
+  {
+   "id": "A8",
+   "quote": "If the person says the number does not belong to the customer, close as `not_reached` / `wrong_number`.",
+   "stage": "third_party",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the person says it is a wrong number"
+  },
+  {
+   "id": "A9",
+   "quote": "If the person says the customer has died, say \"I am sorry for your loss.\", ask nothing else, and close as `not_reached` / `deceased`.",
+   "stage": "third_party",
+   "class": "speech",
+   "status": "decided",
+   "kind": "wording",
+   "applies": "the person says the customer has died",
+   "wording": "I am sorry for your loss."
+  },
+  {
+   "id": "A10",
+   "quote": "A relative may not answer the security questions and may not be told anything about the account, even if they offer to pay.",
+   "stage": "third_party",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "a relative or other third party is on the line"
+  },
+  {
+   "id": "A11a",
+   "quote": "Ask two security questions, one at a time: first the date of birth, then the last four digits of the phone number on file.",
+   "stage": "identity",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the customer confirmed who they are",
+   "note": "verify_identity fields: date_of_birth first, then phone_last4."
+  },
+  {
+   "id": "A11b",
+   "quote": "Call `verify_identity` with the answer. Send a date of birth as `YYYY-MM-DD`, whatever way the customer said it.",
+   "stage": "identity",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "each security answer"
+  },
+  {
+   "id": "A11c",
+   "quote": "The service rejects anything it cannot read as a date. Read a date given only as numbers as day, then month, then year.",
+   "stage": "identity",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the date of birth is given as numbers only",
+   "note": "An unreadable value returns ok=false and is not counted as a wrong answer (tool API)."
+  },
+  {
+   "id": "A12",
+   "quote": "A wrong answer may be asked again. Three wrong answers in total end the check, whichever question they were on.",
+   "stage": "identity",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "a security answer is wrong",
+   "note": "Use wrong_answers_left from verify_identity; the count spans both questions."
+  },
+  {
+   "id": "A13",
+   "quote": "If the customer gives day and month the other way round, `verify_identity` returns `hint: \"day_month_swapped\"`. Ask them to say the month as a word. That retry does not count as a wrong answer.",
+   "stage": "identity",
+   "class": "flow",
+   "status": "decided",
+   "kind": "content",
+   "applies": "verify_identity returns hint day_month_swapped",
+   "depends_on": [
+    "A12"
+   ]
+  },
+  {
+   "id": "A14",
+   "quote": "After three wrong answers, do not state the debt. Tell the customer to use the mobile app or a branch. Close as `not_verified` / `failed`.",
+   "stage": "identity",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "three wrong answers in total",
+   "depends_on": [
+    "A12"
+   ]
+  },
+  {
+   "id": "A15a",
+   "quote": "If the customer does not want to answer, explain once that the questions protect their account. If they still decline, close as `not_verified` / `declined`.",
+   "stage": "identity",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer declines a security question"
+  },
+  {
+   "id": "A15b",
+   "quote": "Asking what the call is about instead of answering counts as declining. A second refusal or a second such question closes the call.",
+   "stage": "identity",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer asks what the call is about instead of answering a security question",
+   "depends_on": [
+    "A15a"
+   ]
+  },
+  {
+   "id": "A16",
+   "quote": "After both questions pass, call `get_account`.",
+   "stage": "debt",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "both security questions passed (all_verified)"
+  },
+  {
+   "id": "A17",
+   "quote": "Say that you are calling from the collections team about a late payment. Name the product in words: \"credit card ending 4821\", \"personal loan\" or \"car loan\". State the past-due amount and how many days late it is.",
+   "stage": "debt",
+   "class": "speech",
+   "status": "decided",
+   "kind": "content",
+   "applies": "right after get_account returns",
+   "note": "type credit_card -> 'credit card ending <card_last4>', personal_loan -> 'personal loan', car_loan -> 'car loan'."
+  },
+  {
+   "id": "A-cal",
+   "quote": "Business days are Monday to Friday, except Freya Bank holidays: 2026-10-26, 2026-11-11, 2026-11-26, 2026-12-25, 2027-01-01.",
+   "stage": "dates",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "every business-day calculation"
+  },
+  {
+   "id": "A18",
+   "quote": "The **deadline** depends on how late the customer is.",
+   "stage": "dates",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "after get_account, per product"
+  },
+  {
+   "id": "A18e",
+   "quote": "1 to 7 | early | the 12th business day after today | 1",
+   "stage": "dates",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "days_late is 1 to 7",
+   "note": "early band: deadline = 12th business day after today (today not counted); 1 persuasion attempt.",
+   "depends_on": [
+    "A-cal"
+   ]
+  },
+  {
+   "id": "A18l",
+   "quote": "8 to 45 | late | the 7th business day after today | 2",
+   "stage": "dates",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "days_late is 8 to 45",
+   "note": "late band: deadline = 7th business day after today (today not counted); 2 persuasion attempts.",
+   "depends_on": [
+    "A-cal"
+   ]
+  },
+  {
+   "id": "A19",
+   "quote": "A promise date must be today or later, a business day, and not after the deadline.",
+   "stage": "dates",
+   "class": "gate",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "before any read-back or create_promise",
+   "depends_on": [
+    "A-cal",
+    "A18"
+   ]
+  },
+  {
+   "id": "A20",
+   "quote": "If the customer names a weekend day or a holiday that is not after the deadline, offer the next business day. If the named day is after the deadline, rule 23 applies.",
+   "stage": "dates",
+   "class": "flow",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer names a non-business day",
+   "depends_on": [
+    "A19",
+    "A23"
+   ]
+  },
+  {
+   "id": "A21",
+   "quote": "If the customer gives a vague period (\"next week\", \"end of the month\", \"when my salary comes\"), ask once for the exact day. If they still give none, propose the deadline.",
+   "stage": "dates",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer names a period, not a day"
+  },
+  {
+   "id": "A22",
+   "quote": "\"Next <weekday>\" means that weekday in the following calendar week. \"This <weekday>\" means the one in the current week. So \"next Friday\" said on a Friday is the Friday of the following week.",
+   "stage": "dates",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer names a weekday"
+  },
+  {
+   "id": "A23",
+   "quote": "If the customer asks for a date after the deadline, say the latest date you can record is the deadline and offer it. If the customer refuses the deadline, treat it as a flat refusal (rule 30).",
+   "stage": "dates",
+   "class": "flow",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer asks for a date after the deadline",
+   "depends_on": [
+    "A19",
+    "A30"
+   ]
+  },
+  {
+   "id": "A24",
+   "quote": "Ask for the full past-due amount first. Never ask \"how much can you pay?\". The agent proposes every amount.",
+   "stage": "amounts",
+   "class": "speech",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "negotiating the amount"
+  },
+  {
+   "id": "A25",
+   "quote": "The **floor** is `minimum_payment` for a credit card and `instalment_amount` for a personal loan or a car loan.",
+   "stage": "amounts",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "per product"
+  },
+  {
+   "id": "A26a",
+   "quote": "If the customer says the full amount is too much, offer the floor, once. Say that the rest stays overdue.",
+   "stage": "amounts",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer says the full amount is too much",
+   "depends_on": [
+    "A25"
+   ]
+  },
+  {
+   "id": "A26b",
+   "quote": "If the customer refuses the floor, treat it as a flat refusal (rule 30). Attempt 2 may name the floor again, on the deadline.",
+   "stage": "amounts",
+   "class": "flow",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer refuses the floor",
+   "depends_on": [
+    "A30",
+    "A30-2"
+   ]
+  },
+  {
+   "id": "A27a",
+   "quote": "If the customer proposes an amount from the floor up to the full amount, both included, accept it.",
+   "stage": "amounts",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer proposes an amount",
+   "depends_on": [
+    "A25"
+   ]
+  },
+  {
+   "id": "A27b",
+   "quote": "Below the floor, say it cannot be recorded and offer the floor once. If the customer does not accept the floor, treat it as a flat refusal (rule 30).",
+   "stage": "amounts",
+   "class": "flow",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer proposes an amount below the floor",
+   "depends_on": [
+    "A25",
+    "A30"
+   ]
+  },
+  {
+   "id": "A28",
+   "quote": "First ask: \"Can you make this payment today?\".",
+   "stage": "negotiation",
+   "class": "speech",
+   "status": "decided",
+   "kind": "wording",
+   "applies": "right after stating the debt, single product",
+   "wording": "Can you make this payment today?"
+  },
+  {
+   "id": "A29",
+   "quote": "A date or an amount the customer proposes is never a refusal. Handle it with sections 7 and 8.",
+   "stage": "negotiation",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the customer proposes a date or an amount"
+  },
+  {
+   "id": "A30",
+   "quote": "A flat refusal or a non-answer uses one persuasion attempt. A no to paying today with no date and no amount is a flat refusal. Attempt 1 is for the full past-due amount, or for the floor if the customer already said the full amount is too much.",
+   "stage": "negotiation",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer flatly refuses or does not answer",
+   "depends_on": [
+    "A18e",
+    "A18l"
+   ]
+  },
+  {
+   "id": "A30-1",
+   "quote": "Attempt 1: propose the last business day of this week. If today is that day, propose the last business day of next week.",
+   "stage": "negotiation",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "first persuasion attempt for a product",
+   "depends_on": [
+    "A-cal",
+    "A30"
+   ]
+  },
+  {
+   "id": "A30-2",
+   "quote": "Attempt 2, late band only: propose the floor amount on the deadline.",
+   "stage": "negotiation",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "second persuasion attempt, product in the late band",
+   "depends_on": [
+    "A18l",
+    "A25",
+    "A30"
+   ]
+  },
+  {
+   "id": "A31",
+   "quote": "When the attempts are used up, stop. Do not repeat an offer the customer already refused. Close as `no_promise` / `refused`.",
+   "stage": "negotiation",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "all persuasion attempts of the band are used",
+   "depends_on": [
+    "A30"
+   ]
+  },
+  {
+   "id": "A32a",
+   "quote": "If the customer mentions illness, a death in the family or job loss, say one short sentence of sympathy and make no persuasion attempt. Offer to connect them with the customer support team.",
+   "stage": "negotiation",
+   "class": "flow",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "the verified customer mentions illness, a death in the family or job loss",
+   "depends_on": [
+    "A30",
+    "A41"
+   ]
+  },
+  {
+   "id": "A32b",
+   "quote": "If they accept, call `transfer_to_agent` with queue `support` and close as `transferred` / `support`. If they decline, close as `no_promise` / `hardship`.",
+   "stage": "negotiation",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "after the support offer",
+   "depends_on": [
+    "A32a"
+   ]
+  },
+  {
+   "id": "A32c",
+   "quote": "This rule comes before rules 30 and 41. If the customer still names a date or an amount themselves, record the promise under sections 7 and 8.",
+   "stage": "negotiation",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "hardship mentioned together with a refusal, a plan request or a customer-named date or amount",
+   "depends_on": [
+    "A30",
+    "A41",
+    "A32a"
+   ]
+  },
+  {
+   "id": "A33",
+   "quote": "Never offer a discount, a waiver, an instalment plan or any term that is not in this brief.",
+   "stage": "negotiation",
+   "class": "gate",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "always"
+  },
+  {
+   "id": "A34",
+   "quote": "Read the product, the amount and the date back and ask \"Do you confirm?\". Call `create_promise` only after a clear yes.",
+   "stage": "confirm",
+   "class": "gate",
+   "status": "decided",
+   "kind": "wording",
+   "applies": "before create_promise",
+   "wording": "Do you confirm?"
+  },
+  {
+   "id": "A35",
+   "quote": "If the customer changes the date or the amount at this step, check the new value against sections 7 and 8 and read it back again.",
+   "stage": "confirm",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the customer changes a value at the read-back",
+   "depends_on": [
+    "A19",
+    "A27a",
+    "A34"
+   ]
+  },
+  {
+   "id": "A36",
+   "quote": "One promise per product. A recorded promise cannot be changed or cancelled in the same call. If the customer asks, say they can change it in the mobile app.",
+   "stage": "confirm",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "after create_promise succeeded for a product"
+  },
+  {
+   "id": "A37",
+   "quote": "Say the promise is recorded only after `create_promise` returns `ok: true`. If it fails, try once more. If it fails again, say you could not record it and close as `no_promise` / `service_error`.",
+   "stage": "confirm",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "create_promise is called",
+   "note": "At most two create_promise calls per product."
+  },
+  {
+   "id": "A38",
+   "quote": "After a recorded promise, say this sentence: \"You will receive a text message confirming this promise.\"",
+   "stage": "confirm",
+   "class": "speech",
+   "status": "decided",
+   "kind": "wording",
+   "applies": "after create_promise returned ok: true",
+   "wording": "You will receive a text message confirming this promise.",
+   "depends_on": [
+    "A37"
+   ]
+  },
+  {
+   "id": "A39",
+   "quote": "\"I already paid\": say that payments can take one business day to appear, take no promise, and close as `paid`.",
+   "stage": "other",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "content",
+   "applies": "the verified customer says this past-due amount is already paid"
+  },
+  {
+   "id": "A40",
+   "quote": "\"This debt is not mine\" or \"I never had this product\": do not argue and do not take a promise. Close as `no_promise` / `dispute`. A claim that the product was closed or paid off in the past is a dispute. Rule 39 covers only a payment of this past-due amount.",
+   "stage": "other",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the verified customer disputes the debt or the product",
+   "depends_on": [
+    "A39"
+   ]
+  },
+  {
+   "id": "A41",
+   "quote": "A request for a new payment plan or lower instalments: do not describe a plan. Call `transfer_to_agent` with queue `restructuring` and close as `transferred` / `restructuring`.",
+   "stage": "other",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the verified customer asks for a new plan or lower instalments",
+   "depends_on": [
+    "A33"
+   ]
+  },
+  {
+   "id": "A42",
+   "quote": "A request for a human: ask once whether you can help first. If they insist, call `transfer_to_agent` with queue `general` and close as `transferred` / `human`.",
+   "stage": "other",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer asks for a human, before or after verification"
+  },
+  {
+   "id": "A43",
+   "quote": "\"Is this a scam?\": say they can verify the call by phoning Freya Bank's customer service number, and continue.",
+   "stage": "any",
+   "class": "speech",
+   "status": "decided",
+   "kind": "content",
+   "applies": "the customer asks whether the call is a scam"
+  },
+  {
+   "id": "A44",
+   "quote": "A question you cannot answer from the tools: say you do not have that information. Do not invent figures, dates or reasons.",
+   "stage": "any",
+   "class": "speech",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "the customer asks something the tools do not answer"
+  },
+  {
+   "id": "A45",
+   "quote": "If the customer says twice that they do not want to talk, close as `no_promise` / `refused`. Before identity is verified, the same customer is closed as `not_verified` / `declined`. Rule 42 applies before and after verification.",
+   "stage": "other",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "the customer says they do not want to talk",
+   "depends_on": [
+    "A42"
+   ]
+  },
+  {
+   "id": "A46",
+   "quote": "Every call ends with exactly one `close_call`, with an outcome and, where the table lists one, a reason. It is the last tool call.",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "every call"
+  },
+  {
+   "id": "A46-promise",
+   "quote": "`promise` | none | at least one promise was recorded",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing with at least one recorded promise"
+  },
+  {
+   "id": "A46-paid",
+   "quote": "`paid` | none | rule 39",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing after an already-paid claim",
+   "depends_on": [
+    "A39"
+   ]
+  },
+  {
+   "id": "A46-transferred",
+   "quote": "`transferred` | `restructuring`, `human`, `support` | rules 41, 42, 32",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing after a transfer",
+   "note": "reason restructuring <- queue restructuring; reason human <- queue general; reason support <- queue support.",
+   "depends_on": [
+    "A41",
+    "A42",
+    "A32b"
+   ]
+  },
+  {
+   "id": "A46-no_promise",
+   "quote": "`no_promise` | `refused`, `hardship`, `dispute`, `service_error` | rules 31 and 45, 32, 40, 37",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing a verified call with no promise",
+   "depends_on": [
+    "A31",
+    "A45",
+    "A32b",
+    "A40",
+    "A37"
+   ]
+  },
+  {
+   "id": "A46-not_verified",
+   "quote": "`not_verified` | `failed`, `declined` | rules 14, 15",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing when identity was not verified",
+   "depends_on": [
+    "A14",
+    "A15a"
+   ]
+  },
+  {
+   "id": "A46-not_reached",
+   "quote": "`not_reached` | `callback`, `no_callback`, `wrong_number`, `deceased`, `unclear` | rules 6, 7, 8, 9, 3",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing when the customer was not reached",
+   "depends_on": [
+    "A6b",
+    "A7",
+    "A8",
+    "A9",
+    "A3b"
+   ]
+  },
+  {
+   "id": "A46-xfer",
+   "quote": "If a transfer follows a recorded promise, close as `transferred` with that transfer's reason.",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "a transfer happens after a promise was recorded",
+   "depends_on": [
+    "A46-promise"
+   ]
+  },
+  {
+   "id": "A-nonote",
+   "quote": "Brief A never uses `add_note`.",
+   "stage": "closing",
+   "class": "gate",
+   "status": "unresolved",
+   "kind": "allowed_set",
+   "applies": "the customer has exactly one late product",
+   "note": "Conflicts with B8 for a one-product customer, see open_questions."
+  },
+  {
+   "id": "A47",
+   "quote": "Thank the customer and say goodbye before `close_call`.",
+   "stage": "closing",
+   "class": "speech",
+   "status": "decided",
+   "kind": "content",
+   "applies": "every call, just before close_call"
+  },
+  {
+   "id": "B-scope",
+   "quote": "Brief B: Freya Bank, up to three products",
+   "stage": "multi",
+   "class": "flow",
+   "status": "decided",
+   "kind": "content",
+   "applies": "the customer has more than one late product"
+  },
+  {
+   "id": "B0",
+   "quote": "Brief B is Brief A with a customer who can be late on up to three products. Every rule of Brief A applies unless a rule below replaces it.",
+   "stage": "multi",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "the customer has more than one late product"
+  },
+  {
+   "id": "B1",
+   "quote": "`get_account` returns one to three products. Each has its own `past_due`, `days_late` and floor.",
+   "stage": "multi",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "after get_account",
+   "depends_on": [
+    "A25"
+   ]
+  },
+  {
+   "id": "B2",
+   "quote": "State every late product, one sentence each, before asking for anything.",
+   "stage": "multi",
+   "class": "speech",
+   "status": "decided",
+   "kind": "content",
+   "applies": "right after get_account, several products",
+   "depends_on": [
+    "A17"
+   ]
+  },
+  {
+   "id": "B3",
+   "quote": "The band and the deadline are per product, from that product's `days_late`. Two products of the same customer can have different deadlines.",
+   "stage": "multi",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "several products",
+   "depends_on": [
+    "A18e",
+    "A18l"
+   ]
+  },
+  {
+   "id": "B4",
+   "quote": "First ask whether the customer can pay all of them today. If not, go through the products one by one, in the order `get_account` returned them. Do not ask about today again for each product. Start each product at attempt 1 of Brief A rule 30.",
+   "stage": "multi",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "several products, after stating them",
+   "note": "Replaces the single-product first ask of A28.",
+   "depends_on": [
+    "A28",
+    "A30-1"
+   ]
+  },
+  {
+   "id": "B5",
+   "quote": "Persuasion attempts are counted per product.",
+   "stage": "multi",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "several products",
+   "depends_on": [
+    "A30"
+   ]
+  },
+  {
+   "id": "B6",
+   "quote": "If the customer names one date for everything and it is after one product's deadline, record that product on its own deadline and say so in the read-back. The other products keep the date the customer named.",
+   "stage": "multi",
+   "class": "calc",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "one date named for all products and it is after one product's deadline",
+   "depends_on": [
+    "A23",
+    "B3"
+   ]
+  },
+  {
+   "id": "B7",
+   "quote": "Read all promises back together and ask for one confirmation. Then call `create_promise` once per product.",
+   "stage": "multi",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "several products, before recording",
+   "depends_on": [
+    "A34"
+   ]
+  },
+  {
+   "id": "B8",
+   "quote": "The customer may promise some products and refuse others. For each product without a promise call `add_note` with that `product_id` and a reason: `refused`, `hardship`, `dispute`, `paid` or `service_error`. This also applies when no product gets a promise.",
+   "stage": "multi",
+   "class": "state",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "Brief B call that ends without a transfer; each product without a promise",
+   "depends_on": [
+    "A-nonote",
+    "B10c"
+   ]
+  },
+  {
+   "id": "B9",
+   "quote": "A dispute or an \"already paid\" claim on one product does not end the call. Note it and continue with the others.",
+   "stage": "multi",
+   "class": "flow",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "several products; a dispute or paid claim on one of them",
+   "depends_on": [
+    "A39",
+    "A40"
+   ]
+  },
+  {
+   "id": "B10a",
+   "quote": "A restructuring request still transfers the call (Brief A rule 41). Promises recorded before the request stay. Promises agreed but not yet recorded are not recorded.",
+   "stage": "multi",
+   "class": "gate",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "restructuring request with several products",
+   "depends_on": [
+    "A41"
+   ]
+  },
+  {
+   "id": "B10b",
+   "quote": "Close as `transferred` / `restructuring`.",
+   "stage": "multi",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "restructuring request with several products",
+   "depends_on": [
+    "A41",
+    "A46-xfer"
+   ]
+  },
+  {
+   "id": "B10c",
+   "quote": "On any transfer (restructuring, support, human) add no notes at all, before or after it.",
+   "stage": "multi",
+   "class": "gate",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "any call that ends in a transfer",
+   "note": "Notes must therefore be written only at the end, once it is certain no transfer happens."
+  },
+  {
+   "id": "B11",
+   "quote": "If one `create_promise` fails twice, keep the promises that were recorded and call `add_note` with reason `service_error` for the failed product.",
+   "stage": "multi",
+   "class": "state",
+   "status": "decided",
+   "kind": "limit",
+   "applies": "several products; create_promise failed twice for one of them",
+   "depends_on": [
+    "A37"
+   ]
+  },
+  {
+   "id": "B-close0",
+   "quote": "The outcome table of Brief A applies.",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "allowed_set",
+   "applies": "closing a Brief B call",
+   "depends_on": [
+    "A46"
+   ]
+  },
+  {
+   "id": "B-close1",
+   "quote": "With no promise recorded: if every product is noted `paid`, close as `paid`.",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "Brief B, no promise recorded, every note is paid"
+  },
+  {
+   "id": "B-close2",
+   "quote": "Otherwise close as `no_promise` with the reason of the first product, in `get_account` order, whose note is not `paid`.",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "Brief B, no promise recorded, at least one note is not paid",
+   "depends_on": [
+    "B-close1"
+   ]
+  },
+  {
+   "id": "B-close3",
+   "quote": "With several products, `promise` wins whenever at least one promise was recorded, except rule 10 above.",
+   "stage": "closing",
+   "class": "outcome",
+   "status": "decided",
+   "kind": "gate",
+   "applies": "Brief B, at least one promise recorded",
+   "depends_on": [
+    "B10b"
+   ]
+  }
+ ],
+ "unused": {
+  "4821": "example card ending in rule 17 (quoted in A17), not a fixed value",
+  "13": "list number of Brief A rule 13, covered by rule id A13*",
+  "16": "list number of Brief A rule 16, covered by rule id A16*",
+  "17": "list number of Brief A rule 17, covered by rule id A17*",
+  "18": "list number of Brief A rule 18, covered by rule id A18*",
+  "22": "list number of Brief A rule 22, covered by rule id A22*",
+  "24": "list number of Brief A rule 24, covered by rule id A24*",
+  "29": "list number of Brief A rule 29, covered by rule id A29*",
+  "33": "list number of Brief A rule 33, covered by rule id A33*",
+  "34": "list number of Brief A rule 34, covered by rule id A34*",
+  "35": "list number of Brief A rule 35, covered by rule id A35*",
+  "36": "list number of Brief A rule 36, covered by rule id A36*",
+  "38": "list number of Brief A rule 38, covered by rule id A38*",
+  "44": "list number of Brief A rule 44, covered by rule id A44*",
+  "46": "list number of Brief A rule 46, covered by rule id A46*",
+  "47": "list number of Brief A rule 47, covered by rule id A47*"
+ },
+ "skipped_lines": {
+  "3": "disclaimer: the bank and the data are fictional",
+  "5": "advice to the reader, no obligation for the agent",
+  "15": "header row of the call-variable table",
+  "57": "header row of the deadline table (rows are A18e, A18l)",
+  "108": "header row of the outcome table (rows are A46-*)",
+  "128": "disclaimer repeated for Brief B",
+  "7": "section heading",
+  "11": "section heading",
+  "22": "section heading",
+  "29": "section heading",
+  "38": "section heading",
+  "46": "section heading",
+  "51": "section heading",
+  "68": "section heading",
+  "75": "section heading",
+  "86": "section heading",
+  "94": "section heading",
+  "104": "section heading",
+  "132": "section heading",
+  "146": "section heading"
+ },
+ "open_questions": [
+  {
+   "id": "Q1",
+   "rules": [
+    "A-nonote",
+    "B8",
+    "B1"
+   ],
+   "question": "A customer with exactly one late product that ends without a promise: Brief A says add_note is never used, Brief B says get_account returns one to three products and every product without a promise gets a note. The call variables do not say which brief a call is under.",
+   "built": "Product count decides: one product = Brief A, no add_note; two or three = Brief B, notes. To be re-checked against the practice results in phase 2."
+  },
+  {
+   "id": "Q2",
+   "rules": [
+    "B8",
+    "A36"
+   ],
+   "question": "The tool API does not document the form of product_id. expectations.json names products p1, p2, p3 in get_account order as placeholders.",
+   "built": "The workflow always passes the product_id that get_account returned."
+  },
+  {
+   "id": "Q3",
+   "rules": [
+    "A30-1",
+    "B4"
+   ],
+   "question": "Brief B, customer cannot pay all today and then names a date for one product only: the remaining products start at attempt 1 (B4), read as proposing the full amount on the last business day of this week.",
+   "built": "As read."
+  }
+ ]
+}
