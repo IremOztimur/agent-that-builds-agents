@@ -11,7 +11,7 @@ The practice customers for this brief are played against your published agent in
 
 0. `python3 tools/clock.py` shows the minutes left. Never start a run you cannot finish: ten customers take about 3 to 6 minutes. Keep the last 5 minutes free.
 1. **Publish and save.** `python3 tools/publish.py workflow.json` prints the `agent_id`. Copy the file to `versions/v1.json`.
-2. **Run.** In the foreground, and wait for it to end: `python3 tools/practice.py run <agent_id> --brief <A or B> --name r1`. It prints, per customer, pass or fail, the tool calls, and for a failure which part was wrong and what your agent actually recorded. Add the result to `scores.json` (version, passed ids, failed ids).
+2. **Run.** In the foreground, and wait for it to end: `python3 tools/practice.py run <agent_id> --brief <A or B> --name r1`. It prints, per customer, pass or fail, the tool calls, and for a failure which part was wrong and what your agent actually recorded. Add the result to `scores.json` (version, passed ids, failed ids). One repetition per run is enough for now: do not use `--reps`.
 3. **Re-run failures once** with `--only ID,ID --name r1b`. The simulated customer and the judge are models and vary between runs. A customer that passes on the second run is noise, not a bug; note it.
 4. **Read every real failure.** `python3 tools/practice.py show r1` prints, per failure, which part was wrong, the judge's reason (numbers and months masked), and the transcript with every tool call and routing step. Ask yourself: what does the brief require here, and what did the agent do instead?
 5. **Tag by cause, then group.** Many failures share one cause; fix the cause once.
@@ -30,7 +30,7 @@ The practice customers for this brief are played against your published agent in
    - Never put a customer id, name, amount or date from the practice set into the workflow. A failure shows that the brief was misread or enforced too weakly; it is not the specification. Re-read the brief rule, work out the correct value yourself from the rule, and implement the rule completely.
    - `NOT_ENFORCED` is fixed by moving the rule into structure or code (a gate, a code node, a hook), not by more prompt text.
 7. **No regressions.** Publish the repaired workflow, save it as `versions/vN.json`, rerun all customers, update `scores.json`. Keep the change only if the targeted failures are fixed and nothing that passed before now fails. Otherwise copy the previous version back to `workflow.json`, publish it again, and note why in `repairs.md`.
-8. **Stop** when everything passes twice in a row, after three repair rounds, or when `tools/clock.py` shows under 6 minutes.
+8. **Stop** when everything passes twice in a row, after two repair rounds, or when `tools/clock.py` shows under 6 minutes.
 
 ## Finish
 

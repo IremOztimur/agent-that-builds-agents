@@ -1,6 +1,6 @@
 """The builder: reads a bank brief and its tool API file, creates the phone agent on Freya. No manual step.
 
-    python3 builder/build.py <brief file, any name> <tool API file, any name> [--slot NAME] [--cases A|B] [--minutes 27] [--prepare-only]
+    python3 builder/build.py <brief file, any name> <tool API file, any name> [--slot NAME] [--cases A|B] [--minutes 20] [--prepare-only]
 
 One Claude Agent SDK session works in a clean temporary folder that holds only the brief, the tool API file, the platform
 docs, the example agent, the practice customers of the brief (A or B) and the helper tools. Three skills (read-brief, compose-workflow, test-and-repair) guide it.
@@ -162,7 +162,7 @@ def main(argv):
     brief, api = argv[0], argv[1]
     opt = {argv[i]: argv[i + 1] for i in range(2, len(argv) - 1) if argv[i].startswith("--")}
     slot = opt.get("--slot") or pathlib.Path(brief).stem
-    minutes = int(opt.get("--minutes", 27))
+    minutes = int(opt.get("--minutes", 20))
     cases = opt.get("--cases", "A")
     work = prepare(brief, api, slot, cases)
     if "--prepare-only" in argv:
