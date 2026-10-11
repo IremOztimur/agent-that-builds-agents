@@ -1,0 +1,801 @@
+{
+ "brief_lines": 121,
+ "rules": [
+  {
+   "id": "S1.scope",
+   "quote": "Freya Bank calls customers who are 1 to 45 days late on one product.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "global",
+   "note": "Exactly one late product per call in Brief A; days_late 1 to 45."
+  },
+  {
+   "id": "S1.job",
+   "quote": "The agent finds the customer, checks identity, states the debt, gets a payment promise where it can, and closes the call with the correct outcome.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "global",
+   "note": "Stage order: opening -> identity -> debt -> promise -> close."
+  },
+  {
+   "id": "S2.vars_only",
+   "quote": "Every call starts with these. Nothing else is known before the tools are called.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "global",
+   "note": "No account fact (product, amount, days late) may be used or said before get_account returned it."
+  },
+  {
+   "id": "S2.customer_id",
+   "quote": "Pass it to every tool call.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "global",
+   "note": "customer_id goes into the body of all tool calls: verify_identity, get_account, create_promise, schedule_callback, transfer_to_agent, close_call."
+  },
+  {
+   "id": "S2.name",
+   "quote": "The person to ask for.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "opening",
+   "note": "first_name, last_name."
+  },
+  {
+   "id": "S2.title",
+   "quote": "Address the customer as title plus last name.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "global",
+   "note": "title is Mr or Ms. Never first name alone."
+  },
+  {
+   "id": "S2.now",
+   "quote": "The current date and time. All date rules use this, never the real clock.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "dates",
+   "note": "'today' = date part of now (example value 2026-10-14T11:00, i.e. 11:00 on 2026-10-14). Code must take now as an input, never read the system clock."
+  },
+  {
+   "id": "R1.opening",
+   "quote": "First sentence: say you are a digital assistant calling from Freya Bank, and that the call is recorded.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "opening",
+   "note": "Brief rule 1."
+  },
+  {
+   "id": "R1.no_reason_words",
+   "quote": "Do not say \"collections\", \"debt\", \"payment\" or the product before identity is verified. This applies to everyone, including relatives.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "opening",
+   "note": "Brief rule 1. Forbidden words until all_verified is true. Covers third parties too."
+  },
+  {
+   "id": "R2.ask_name",
+   "quote": "Ask \"Am I speaking with {title} {last_name}?\".",
+   "class": "speech",
+   "status": "decided",
+   "stage": "opening",
+   "note": "Brief rule 2."
+  },
+  {
+   "id": "R3.confirmation",
+   "quote": "Only \"yes\", \"that's me\", \"speaking\" or the customer's own name counts as confirmation. \"Hello\", \"go ahead\" and \"who is this\" do not.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "opening",
+   "note": "Brief rule 3."
+  },
+  {
+   "id": "R3.second_ask",
+   "quote": "Ask once more. If it is still unclear after the second ask, close as `not_reached` / `unclear`.",
+   "class": "state",
+   "status": "decided",
+   "stage": "opening",
+   "note": "Brief rule 3. Counter: at most 2 asks in total, then close_call outcome not_reached reason unclear."
+  },
+  {
+   "id": "R3.question_first",
+   "quote": "Answer a question from the customer first (rules 4 and 43). The ask that follows is the second ask.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "opening",
+   "note": "Brief rule 3. Answering a robot/scam question does not give an extra ask."
+  },
+  {
+   "id": "R4.robot",
+   "quote": "If the customer asks whether you are a robot or an AI, say that you are Freya Bank's digital assistant and continue.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "global",
+   "note": "Brief rule 4. Any stage; resume where the call was."
+  },
+  {
+   "id": "R5.third_party_silence",
+   "quote": "Do not say why you are calling. Say nothing beyond the opening sentence of rule 1.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 5. Section 4 = someone else answers."
+  },
+  {
+   "id": "R5.ask_when",
+   "quote": "Ask when the customer can be reached.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 5."
+  },
+  {
+   "id": "R6.callback_window",
+   "quote": "A callback is for today or the next business day, from 10:00 to 19:00, both included, and later than `now`.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 6. Date in {today, next business day after today}; time 10:00..19:00 inclusive; datetime strictly later than now. Business days per the section 7 definition."
+  },
+  {
+   "id": "R6.schedule",
+   "quote": "Call `schedule_callback` with the date and the time, then close as `not_reached` / `callback`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 6. API: date YYYY-MM-DD, time HH:MM. The service does not enforce the window; the agent must."
+  },
+  {
+   "id": "R7.outside_window",
+   "quote": "If the person offers a day or a time outside that window, ask once for another time. If that is also outside it, do not schedule. Close as `not_reached` / `no_callback`.",
+   "class": "state",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 7. One re-ask only; no schedule_callback on the no_callback path."
+  },
+  {
+   "id": "R8.wrong_number",
+   "quote": "If the person says the number does not belong to the customer, close as `not_reached` / `wrong_number`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 8."
+  },
+  {
+   "id": "R9.deceased",
+   "quote": "If the person says the customer has died, say \"I am sorry for your loss.\", ask nothing else, and close as `not_reached` / `deceased`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 9. Exact sentence; no callback question."
+  },
+  {
+   "id": "R10.relative",
+   "quote": "A relative may not answer the security questions and may not be told anything about the account, even if they offer to pay.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "third_party",
+   "note": "Brief rule 10. No verify_identity for a third party."
+  },
+  {
+   "id": "R11.two_questions",
+   "quote": "Ask two security questions, one at a time: first the date of birth, then the last four digits of the phone number on file.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 11. API field values: date_of_birth, then phone_last4 (four digits)."
+  },
+  {
+   "id": "R11.verify_call",
+   "quote": "Call `verify_identity` with the answer.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 11. One call per answer; response has verified, wrong_answers_left, all_verified, hint."
+  },
+  {
+   "id": "R11.dob_format",
+   "quote": "Send a date of birth as `YYYY-MM-DD`, whatever way the customer said it. The service rejects anything it cannot read as a date.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 11. API: an unreadable value returns ok=false and is not counted as a wrong answer."
+  },
+  {
+   "id": "R11.numeric_dmy",
+   "quote": "Read a date given only as numbers as day, then month, then year.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 11."
+  },
+  {
+   "id": "R12.three_wrong",
+   "quote": "A wrong answer may be asked again. Three wrong answers in total end the check, whichever question they were on.",
+   "class": "state",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 12. Shared counter across both questions; API returns wrong_answers_left."
+  },
+  {
+   "id": "R13.swap_hint",
+   "quote": "If the customer gives day and month the other way round, `verify_identity` returns `hint: \"day_month_swapped\"`. Ask them to say the month as a word. That retry does not count as a wrong answer.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 13."
+  },
+  {
+   "id": "R14.failed",
+   "quote": "After three wrong answers, do not state the debt. Tell the customer to use the mobile app or a branch. Close as `not_verified` / `failed`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 14. No get_account."
+  },
+  {
+   "id": "R15.decline",
+   "quote": "If the customer does not want to answer, explain once that the questions protect their account. If they still decline, close as `not_verified` / `declined`.",
+   "class": "state",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 15."
+  },
+  {
+   "id": "R15.what_about",
+   "quote": "Asking what the call is about instead of answering counts as declining. A second refusal or a second such question closes the call.",
+   "class": "state",
+   "status": "decided",
+   "stage": "identity",
+   "note": "Brief rule 15. Refusals and 'what is this about' share one counter: first -> explain once, second -> not_verified / declined. The reason for the call still may not be said (rule 1)."
+  },
+  {
+   "id": "R16.get_account",
+   "quote": "After both questions pass, call `get_account`.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "debt",
+   "note": "Brief rule 16. API refuses get_account until both questions are passed. Product type is one of credit_card, personal_loan, car_loan."
+  },
+  {
+   "id": "R17.state_debt",
+   "quote": "Say that you are calling from the collections team about a late payment. Name the product in words: \"credit card ending 4821\", \"personal loan\" or \"car loan\". State the past-due amount and how many days late it is.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "debt",
+   "note": "Brief rule 17. credit_card -> 'credit card ending {card_last4}'; never the product_id or the raw enum. Uses past_due and days_late."
+  },
+  {
+   "id": "S7.business_days",
+   "quote": "Business days are Monday to Friday, except Freya Bank holidays: 2026-10-26, 2026-11-11, 2026-11-26, 2026-12-25, 2027-01-01.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Holiday table for all date code."
+  },
+  {
+   "id": "R18.deadline",
+   "quote": "The **deadline** depends on how late the customer is.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 18. Keyed on days_late from get_account."
+  },
+  {
+   "id": "R18.early",
+   "quote": "1 to 7 | early | the 12th business day after today | 1",
+   "class": "calc",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 18 table row. Today is not counted. 1 persuasion attempt."
+  },
+  {
+   "id": "R18.late",
+   "quote": "8 to 45 | late | the 7th business day after today | 2",
+   "class": "calc",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 18 table row. Today is not counted. 2 persuasion attempts."
+  },
+  {
+   "id": "R19.valid_date",
+   "quote": "A promise date must be today or later, a business day, and not after the deadline.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 19. Hard gate on create_promise; the service does not enforce it."
+  },
+  {
+   "id": "R20.non_business",
+   "quote": "If the customer names a weekend day or a holiday that is not after the deadline, offer the next business day. If the named day is after the deadline, rule 23 applies.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 20."
+  },
+  {
+   "id": "R21.vague",
+   "quote": "If the customer gives a vague period (\"next week\", \"end of the month\", \"when my salary comes\"), ask once for the exact day. If they still give none, propose the deadline.",
+   "class": "state",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 21. Ask-once flag."
+  },
+  {
+   "id": "R22.weekday_words",
+   "quote": "\"Next <weekday>\" means that weekday in the following calendar week. \"This <weekday>\" means the one in the current week. So \"next Friday\" said on a Friday is the Friday of the following week.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 22."
+  },
+  {
+   "id": "R23.after_deadline",
+   "quote": "If the customer asks for a date after the deadline, say the latest date you can record is the deadline and offer it. If the customer refuses the deadline, treat it as a flat refusal (rule 30).",
+   "class": "flow",
+   "status": "decided",
+   "stage": "dates",
+   "note": "Brief rule 23."
+  },
+  {
+   "id": "R24.full_first",
+   "quote": "Ask for the full past-due amount first.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 24."
+  },
+  {
+   "id": "R24.never_how_much",
+   "quote": "Never ask \"how much can you pay?\". The agent proposes every amount.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 24."
+  },
+  {
+   "id": "R25.floor",
+   "quote": "The **floor** is `minimum_payment` for a credit card and `instalment_amount` for a personal loan or a car loan.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 25. credit_card -> minimum_payment; personal_loan, car_loan -> instalment_amount."
+  },
+  {
+   "id": "R26.too_much",
+   "quote": "If the customer says the full amount is too much, offer the floor, once. Say that the rest stays overdue.",
+   "class": "state",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 26. Floor-offered flag."
+  },
+  {
+   "id": "R26.floor_refused",
+   "quote": "If the customer refuses the floor, treat it as a flat refusal (rule 30). Attempt 2 may name the floor again, on the deadline.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 26. Exception to 'once' and to rule 31's no-repeat: attempt 2 (late band)."
+  },
+  {
+   "id": "R27.accept_range",
+   "quote": "If the customer proposes an amount from the floor up to the full amount, both included, accept it.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 27. floor <= amount <= past_due. An amount above past_due is not covered: see open_questions."
+  },
+  {
+   "id": "R27.below_floor",
+   "quote": "Below the floor, say it cannot be recorded and offer the floor once. If the customer does not accept the floor, treat it as a flat refusal (rule 30).",
+   "class": "state",
+   "status": "decided",
+   "stage": "amounts",
+   "note": "Brief rule 27."
+  },
+  {
+   "id": "R28.first_ask",
+   "quote": "First ask: \"Can you make this payment today?\".",
+   "class": "speech",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 28."
+  },
+  {
+   "id": "R29.proposal_not_refusal",
+   "quote": "A date or an amount the customer proposes is never a refusal. Handle it with sections 7 and 8.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 29. Must not consume a persuasion attempt."
+  },
+  {
+   "id": "R30.flat_refusal",
+   "quote": "A flat refusal or a non-answer uses one persuasion attempt. A no to paying today with no date and no amount is a flat refusal.",
+   "class": "state",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 30. Attempt counter; limit from the rule 18 band (1 early, 2 late)."
+  },
+  {
+   "id": "R30.attempt1_amount",
+   "quote": "Attempt 1 is for the full past-due amount, or for the floor if the customer already said the full amount is too much.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 30."
+  },
+  {
+   "id": "R30.attempt1_date",
+   "quote": "Attempt 1: propose the last business day of this week. If today is that day, propose the last business day of next week.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 30. Usually Friday; earlier if Friday is a holiday."
+  },
+  {
+   "id": "R30.attempt2",
+   "quote": "Attempt 2, late band only: propose the floor amount on the deadline.",
+   "class": "calc",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 30."
+  },
+  {
+   "id": "R31.stop",
+   "quote": "When the attempts are used up, stop. Do not repeat an offer the customer already refused. Close as `no_promise` / `refused`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 31."
+  },
+  {
+   "id": "R32.hardship",
+   "quote": "If the customer mentions illness, a death in the family or job loss, say one short sentence of sympathy and make no persuasion attempt. Offer to connect them with the customer support team.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 32."
+  },
+  {
+   "id": "R32.support_accept",
+   "quote": "If they accept, call `transfer_to_agent` with queue `support` and close as `transferred` / `support`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 32."
+  },
+  {
+   "id": "R32.support_decline",
+   "quote": "If they decline, close as `no_promise` / `hardship`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 32."
+  },
+  {
+   "id": "R32.precedence",
+   "quote": "This rule comes before rules 30 and 41. If the customer still names a date or an amount themselves, record the promise under sections 7 and 8.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "promise",
+   "note": "Brief rule 32. Hardship plus a plan request -> support offer, not restructuring. A customer-named date/amount is still taken as a promise."
+  },
+  {
+   "id": "R33.no_extra_terms",
+   "quote": "Never offer a discount, a waiver, an instalment plan or any term that is not in this brief.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "global",
+   "note": "Brief rule 33."
+  },
+  {
+   "id": "R34.read_back",
+   "quote": "Read the product, the amount and the date back and ask \"Do you confirm?\". Call `create_promise` only after a clear yes.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "confirm",
+   "note": "Brief rule 34. create_promise body: customer_id, product_id, amount, date (YYYY-MM-DD)."
+  },
+  {
+   "id": "R35.change",
+   "quote": "If the customer changes the date or the amount at this step, check the new value against sections 7 and 8 and read it back again.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "confirm",
+   "note": "Brief rule 35."
+  },
+  {
+   "id": "R36.one_promise",
+   "quote": "One promise per product. A recorded promise cannot be changed or cancelled in the same call. If the customer asks, say they can change it in the mobile app.",
+   "class": "state",
+   "status": "decided",
+   "stage": "confirm",
+   "note": "Brief rule 36. Once-only flag: never a second create_promise after ok: true."
+  },
+  {
+   "id": "R37.recorded_only_ok",
+   "quote": "Say the promise is recorded only after `create_promise` returns `ok: true`.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "confirm",
+   "note": "Brief rule 37."
+  },
+  {
+   "id": "R37.retry",
+   "quote": "If it fails, try once more. If it fails again, say you could not record it and close as `no_promise` / `service_error`.",
+   "class": "state",
+   "status": "decided",
+   "stage": "confirm",
+   "note": "Brief rule 37. Max 2 create_promise tries. API: failure is ok=false or HTTP 500 (nothing recorded, may be repeated)."
+  },
+  {
+   "id": "R38.sms_sentence",
+   "quote": "After a recorded promise, say this sentence: \"You will receive a text message confirming this promise.\"",
+   "class": "speech",
+   "status": "decided",
+   "stage": "confirm",
+   "note": "Brief rule 38. Exact sentence."
+  },
+  {
+   "id": "R39.already_paid",
+   "quote": "\"I already paid\": say that payments can take one business day to appear, take no promise, and close as `paid`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 39. No reason on close_call."
+  },
+  {
+   "id": "R40.dispute",
+   "quote": "\"This debt is not mine\" or \"I never had this product\": do not argue and do not take a promise. Close as `no_promise` / `dispute`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 40."
+  },
+  {
+   "id": "R40.closed_is_dispute",
+   "quote": "A claim that the product was closed or paid off in the past is a dispute. Rule 39 covers only a payment of this past-due amount.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 40."
+  },
+  {
+   "id": "R41.restructuring",
+   "quote": "A request for a new payment plan or lower instalments: do not describe a plan. Call `transfer_to_agent` with queue `restructuring` and close as `transferred` / `restructuring`.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 41. Rule 32 takes precedence."
+  },
+  {
+   "id": "R42.human",
+   "quote": "A request for a human: ask once whether you can help first. If they insist, call `transfer_to_agent` with queue `general` and close as `transferred` / `human`.",
+   "class": "state",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 42. Queue is general but the close reason is human."
+  },
+  {
+   "id": "R43.scam",
+   "quote": "\"Is this a scam?\": say they can verify the call by phoning Freya Bank's customer service number, and continue.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "global",
+   "note": "Brief rule 43. No number is given in the brief: do not invent one."
+  },
+  {
+   "id": "R44.unknown",
+   "quote": "A question you cannot answer from the tools: say you do not have that information. Do not invent figures, dates or reasons.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "global",
+   "note": "Brief rule 44."
+  },
+  {
+   "id": "R45.no_talk",
+   "quote": "If the customer says twice that they do not want to talk, close as `no_promise` / `refused`. Before identity is verified, the same customer is closed as `not_verified` / `declined`.",
+   "class": "state",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 45."
+  },
+  {
+   "id": "R45.human_anytime",
+   "quote": "Rule 42 applies before and after verification.",
+   "class": "flow",
+   "status": "decided",
+   "stage": "other",
+   "note": "Brief rule 45."
+  },
+  {
+   "id": "R46.close_once",
+   "quote": "Every call ends with exactly one `close_call`, with an outcome and, where the table lists one, a reason. It is the last tool call.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Brief rule 46. API: nothing is accepted after close_call; reason required for every outcome except promise and paid."
+  },
+  {
+   "id": "T.promise",
+   "quote": "`promise` | none | at least one promise was recorded",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Close table row."
+  },
+  {
+   "id": "T.paid",
+   "quote": "`paid` | none | rule 39",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Close table row."
+  },
+  {
+   "id": "T.transferred",
+   "quote": "`transferred` | `restructuring`, `human`, `support` | rules 41, 42, 32",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Close table row."
+  },
+  {
+   "id": "T.no_promise",
+   "quote": "`no_promise` | `refused`, `hardship`, `dispute`, `service_error` | rules 31 and 45, 32, 40, 37",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Close table row."
+  },
+  {
+   "id": "T.not_verified",
+   "quote": "`not_verified` | `failed`, `declined` | rules 14, 15",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Close table row. Also rule 45 before verification."
+  },
+  {
+   "id": "T.not_reached",
+   "quote": "`not_reached` | `callback`, `no_callback`, `wrong_number`, `deceased`, `unclear` | rules 6, 7, 8, 9, 3",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Close table row."
+  },
+  {
+   "id": "S12.transfer_after_promise",
+   "quote": "If a transfer follows a recorded promise, close as `transferred` with that transfer's reason.",
+   "class": "outcome",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Overrides outcome promise."
+  },
+  {
+   "id": "S12.no_add_note",
+   "quote": "Brief A never uses `add_note`.",
+   "class": "gate",
+   "status": "decided",
+   "stage": "global",
+   "note": "add_note must not be called (API marks it Brief B)."
+  },
+  {
+   "id": "R47.goodbye",
+   "quote": "Thank the customer and say goodbye before `close_call`.",
+   "class": "speech",
+   "status": "decided",
+   "stage": "closing",
+   "note": "Brief rule 47. Every path, including third-party closes."
+  }
+ ],
+ "unused": {},
+ "skipped_lines": {
+  "1": "title",
+  "3": "disclaimer: data is synthetic, no obligation",
+  "5": "reading advice, no obligation",
+  "7": "heading",
+  "11": "heading",
+  "15": "table header",
+  "22": "heading",
+  "29": "heading",
+  "38": "heading",
+  "46": "heading",
+  "51": "heading",
+  "57": "table header",
+  "68": "heading",
+  "75": "heading",
+  "86": "heading",
+  "94": "heading",
+  "104": "heading",
+  "108": "table header"
+ },
+ "open_questions": [
+  {
+   "id": "Q1",
+   "about": [
+    "R30.attempt1_date"
+   ],
+   "question": "Call on a Saturday or Sunday: 'the last business day of this week' is already past. Not stated.",
+   "built": "Propose the last business day of the following week, checked against rule 19."
+  },
+  {
+   "id": "Q2",
+   "about": [
+    "R22.weekday_words",
+    "R19.valid_date"
+   ],
+   "question": "'This <weekday>' when that weekday of the current week is already past.",
+   "built": "Not recordable (before today); ask for the exact day once, as a vague period under rule 21."
+  },
+  {
+   "id": "Q3",
+   "about": [
+    "R27.accept_range"
+   ],
+   "question": "Customer proposes more than the full past-due amount.",
+   "built": "Do not record above past_due; propose the full past-due amount."
+  },
+  {
+   "id": "Q4",
+   "about": [
+    "R7.outside_window",
+    "R5.ask_when"
+   ],
+   "question": "The third party gives no time at all or does not know when the customer can be reached.",
+   "built": "Treated like an out-of-window offer: ask once more, then not_reached / no_callback without scheduling."
+  },
+  {
+   "id": "Q5",
+   "about": [
+    "R6.callback_window"
+   ],
+   "question": "Is 'today' allowed for a callback when today is not a business day?",
+   "built": "Stricter: today only if it is a business day; otherwise only the next business day."
+  },
+  {
+   "id": "Q6",
+   "about": [
+    "R37.retry"
+   ],
+   "question": "A failure (500 or ok=false) of verify_identity, get_account, schedule_callback, transfer_to_agent or close_call. The brief only covers create_promise.",
+   "built": "Retry once (API: the call may be repeated); never claim the action happened; no invented close reason. service_error is used only for rule 37."
+  },
+  {
+   "id": "Q7",
+   "about": [
+    "R21.vague",
+    "R30.flat_refusal"
+   ],
+   "question": "Does proposing the deadline under rule 21 consume a persuasion attempt, and what if it is refused?",
+   "built": "Not an attempt; a refusal of it is a flat refusal as in rule 23."
+  },
+  {
+   "id": "Q8",
+   "about": [
+    "R32.hardship",
+    "R41.restructuring",
+    "R1.no_reason_words"
+   ],
+   "question": "Hardship or a plan request raised before identity is verified.",
+   "built": "Rule 1 holds: nothing about the account; continue verification. Only rule 42 (human) is stated to apply before verification."
+  },
+  {
+   "id": "Q9",
+   "about": [
+    "R18.deadline"
+   ],
+   "question": "days_late outside 1 to 45 returned by get_account.",
+   "built": "0 or less is not expected; above 45 is treated as the late band (stricter deadline)."
+  },
+  {
+   "id": "Q10",
+   "about": [
+    "R3.confirmation"
+   ],
+   "question": "Opening answer 'no' with no further information (not clearly a third party, wrong number or unclear).",
+   "built": "Treated as someone else on the line: section 4."
+  }
+ ]
+}
