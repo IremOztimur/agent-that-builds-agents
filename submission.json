@@ -8,7 +8,7 @@
   ],
   "repo": "https://github.com/IremOztimur/agent-that-builds-agents",
   "commit": "7a77291036b4321710e26c41bb5a51098c8a3176",
-  "run_command": "python3 builder/build.py {case_folder} {mock_url} --slot final2 --minutes 21",
+  "run_command": "python3 builder/build.py {case_folder} {mock_url}",
   "workflow": "submission/final2.workflow.json",
   "trace": "traces/final2.log",
   "mock_url": "https://bank-mock.bank-mock-dev.workers.dev"
