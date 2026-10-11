@@ -1,6 +1,6 @@
 """Run the practice customers and see what happened, never what was expected.
 
-    python3 tools/practice.py run <agent_id> --brief A|B [--only ID,ID] [--reps N] [--style S] --name r1
+    python3 tools/practice.py run <agent_id> --brief A|B [--only ID,ID] [--style S] --name r1
     python3 tools/practice.py show r1 [ID ...]
 
 `run` plays the customers against your published agent in text, scores them from the bank's ledger and a judge, and prints
@@ -9,12 +9,13 @@ callbacks, transfers, call not closed, a protected call too early, or the conver
 actually recorded. The expected values and the customer scripts are not shown. Work out what the brief requires from the
 brief. `show` prints the transcript with tool calls and routing, plus the judge's reason with numbers and months masked.
 """
-import json, os, pathlib, re, subprocess, sys
+import json, os, pathlib, re, sys, time
 
 SEALED = pathlib.Path(os.environ["BUILDER_SEALED"])
 WORK = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WORK))
-import freya
+sys.path.insert(0, str(SEALED)); sys.path.insert(0, str(SEALED / "tools"))
+import freya, run_cases, score
 
 MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 
@@ -28,7 +29,11 @@ def parts(failed):
     """(category, what the agent actually did) for each failed check. The expected side is dropped."""
     out = []
     for f in failed:
-        if f.startswith("conversation:"):
+        if f.startswith("conversation: [inconclusive]"):
+            out.append(("judge inconclusive (read its reason in `show`; run this customer once more with --only)", ""))
+        elif f.startswith("conversation: [unfinished]"):
+            out.append(("call did not finish in time (platform slow, or the agent never closed; run it once more with --only)", ""))
+        elif f.startswith("conversation:"):
             out.append(("conversation", ""))
         elif f.startswith("outcome"):
             out.append(("outcome", f.split(", expected")[0][len("outcome "):]))
@@ -53,22 +58,82 @@ def summary(d):
                 print("      wrong:", cat + (" (agent recorded: %s)" % got if got else ""))
 
 
+def personas_for(cases, style):
+    """Persona ids are reused (the store lives in the sealed folder) so the workspace does not fill up."""
+    import hashlib
+    store = SEALED / ".personas.json"
+    ids = json.load(open(store)) if store.exists() else {}
+    spec = {c["id"]: run_cases.persona_for(c, {"identity": c["identity"]}, style) for c in cases}
+    key = {i: i + ":" + hashlib.sha1(json.dumps(p, sort_keys=True).encode()).hexdigest()[:10] for i, p in spec.items()}
+    new = [c for c in cases if key[c["id"]] not in ids]
+    if new:
+        made = freya.create_personas([spec[c["id"]] for c in new])["personas"]
+        ids.update({key[c["id"]]: p["id"] for c, p in zip(new, made)})
+        json.dump(ids, open(store, "w"), indent=1)
+    return {c["id"]: ids[key[c["id"]]] for c in cases}
+
+
+def start(agent, variables):
+    """Start a text simulation. A workspace runs one at a time: wait for the running one, but not forever."""
+    t0 = time.time()
+    while True:
+        try:
+            body = {"agentId": agent, "name": "cases " + time.strftime("%H:%M:%S"), "mode": "chat", "selectedPersonaIds": list(variables),
+                    "customerVariablesMap": variables, "maxConcurrentCalls": 5, "runsPerPersona": 1, "maxCallDurationSeconds": 300,
+                    "assistantLlmOverride": freya.AGENT_LLM, "routingLlmOverride": freya.AGENT_LLM, "extractionLlmOverride": freya.AGENT_LLM,
+                    "personaLlmOverride": freya.SIM_LLM, "analysisLlmOverride": freya.SIM_LLM}
+            sim = freya.api("POST", "/api/v2/simulations", body)
+            return (sim.get("simulation") or sim)["id"]
+        except RuntimeError as e:
+            if "concurrent simulations" not in str(e) or time.time() - t0 > 240:
+                raise
+            time.sleep(15)
+
+
+def collect(sim_id, want, limit):
+    """Poll the runs, not the simulation status (the platform sometimes leaves that at `running` after every call has ended)."""
+    t0 = time.time()
+    runs = []
+    while time.time() - t0 < limit:
+        time.sleep(6)
+        its = freya.api("GET", "/api/v2/simulations/%s/iterations" % sim_id)
+        its = its.get("iterations") or its
+        if not its:
+            continue
+        runs = freya.get_iteration(sim_id, its[0]["id"])["runs"]
+        done = [r for r in runs if r.get("endedAt") or r.get("outcome") in ("pass", "fail", "inconclusive")]
+        if len(done) >= want:
+            break
+    return runs
+
+
 def run(argv):
     agent, rest = argv[0], argv[1:]
-    name = "run"
-    if "--name" in rest:
-        i = rest.index("--name")
-        name = rest[i + 1]
-        rest = rest[:i] + rest[i + 2:]
+    opt = {rest[i]: rest[i + 1] for i in range(len(rest) - 1) if rest[i].startswith("--")}
+    name, style = opt.get("--name", "run"), opt.get("--style")
+    cases = [c for c in json.load(open(SEALED / "public-test-set.json"))
+             if (not opt.get("--brief") or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
+    ids = personas_for(cases, style)
+    sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
+    t0 = time.time()
+    sim_id = start(agent, {ids[c["id"]]: sessions[c["id"]] for c in cases})
+    runs = {r["personaId"]: r for r in collect(sim_id, len(cases), 420)}
+    rows = []
+    for c in cases:
+        r = runs.get(ids[c["id"]], {})
+        led = score.http("/v1/practice/ledger/" + sessions[c["id"]]["customer_id"])
+        res = score.score_ledger(c, led)
+        if not (r.get("endedAt") or r.get("outcome") in ("pass", "fail", "inconclusive")):
+            res["failed"].append("conversation: [unfinished] the call did not finish in time")
+        elif r.get("outcome") != "pass":
+            res["failed"].append("conversation: [%s] %s" % (r.get("outcome"), " ".join(str(r.get("reason") or "no verdict").split())[:500]))
+        rows.append({"id": c["id"], "level": c["level"], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),
+                     "tools": [x["tool"] for x in led["calls"]], "customer_id": sessions[c["id"]]["customer_id"]})
+    n = sum(x["pass"] for x in rows)
     out = SEALED / "results" / (name + ".json")
-    p = subprocess.run([sys.executable, str(SEALED / "tools" / "run_cases.py"), agent] + rest + ["--out", str(out)], capture_output=True, text=True, cwd=str(SEALED))
-    if not out.exists():
-        print((p.stdout + p.stderr)[-1500:])
-        sys.exit("run failed")
-    d = json.load(open(out))
-    summary(d)
-    tail = [l for l in p.stdout.splitlines() if l.startswith(("slowest agent turn", "WARNING"))]
-    print("\n".join(tail))
+    json.dump({"simulation_id": sim_id, "seconds": round(time.time() - t0), "passed": n, "total": len(rows), "runs": 1, "rows": rows}, open(out, "w"), indent=1)
+    summary(json.load(open(out)))
+    print("run took %d s" % (time.time() - t0))
 
 
 def show(argv):
