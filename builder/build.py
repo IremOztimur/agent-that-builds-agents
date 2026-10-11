@@ -1,6 +1,6 @@
 """The builder: reads a bank brief and its tool API file, creates the phone agent on Freya. No manual step.
 
-    python3 builder/build.py <brief.md> <tools.json> [--slot NAME] [--cases A|B] [--minutes 27] [--prepare-only]
+    python3 builder/build.py <brief file, any name> <tool API file, any name> [--slot NAME] [--cases A|B] [--minutes 27] [--prepare-only]
 
 One Claude Agent SDK session works in a clean temporary folder that holds only the brief, the tool API file, the platform
 docs, the example agent, the practice customers of the brief (A or B) and the helper tools. Three skills (read-brief, compose-workflow, test-and-repair) guide it.
