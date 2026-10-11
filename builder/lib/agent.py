@@ -6,6 +6,8 @@ from .paths import SLOTS
 from .workdir import SKILLS, sealed_dir
 
 
+ABS = re.compile(r"(?<![\w.])/(?:Users|private|var|tmp|home|opt|etc)/[^\s'\"`;|&)<>]+")
+
 SELFTEST = re.compile(r"python3?\s+tools/(practice|check_rules|lint|publish|run_code)\.py[^\n;&|]*")
 
 
@@ -14,6 +16,7 @@ class Session:
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
         self.model = os.environ.get("BUILDER_MODEL", "claude-opus-5-5")
         self.deadline, self.trace = deadline, trace
+        self.home = str(work.resolve()), str(work)
         self.client = ClaudeSDKClient(options=ClaudeAgentOptions(
             cwd=work, model=self.model, skills=SKILLS, setting_sources=["project"],
             allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"], permission_mode="dontAsk", max_turns=200,
@@ -39,7 +42,11 @@ class Session:
                     uses = [b for b in m.content if isinstance(b, ToolUseBlock)]
                     texts = [b.text for b in m.content if isinstance(b, TextBlock)]
                     for b in uses:
-                        seen.append(" ".join(str(v) for v in b.input.values()).lower())
+                        text = " ".join(str(v) for v in b.input.values())
+                        seen.append(text.lower())
+                        for path in ABS.findall(text):
+                            if not path.startswith(self.home) and "/.claude/projects/" not in path and not path.startswith(("/tmp/", "/dev/")):
+                                self.trace.line("OUTSIDE", "%s reached outside its folder: %s" % (b.name, path[:160]))
                         found = SELFTEST.search(str(b.input.get("command", ""))) if b.name == "Bash" else None
                         if found:
                             tests[b.id] = found.group(0).strip()[:140]

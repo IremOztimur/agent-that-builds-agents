@@ -7,6 +7,9 @@ from .paths import ROOT
 from .trace import Trace
 
 
+ARTIFACTS = ["rules.json", "design.json", "workflow.json", "scores.json", "repairs.md", "report.md"]
+
+
 async def run_phases(work, slot, deadline, trace):
     """Returns True when all three phases passed their gates."""
     async with agent.Session(work, slot, deadline, trace) as session:
@@ -29,13 +32,18 @@ async def run_phases(work, slot, deadline, trace):
     return True
 
 
-def build(brief, api, slot, cases, minutes, prepare_only=False):
+def build(brief, api, slot, cases, minutes, prepare_only=False, fresh=False):
+    slot = "%s-%s" % (slot, time.strftime("%m%d-%H%M%S")) if fresh else slot
     work = workdir.prepare(brief, api, cases)
     if prepare_only:
         return work, None
     (ROOT / "traces").mkdir(exist_ok=True)
     trace = Trace(ROOT / "traces" / ("%s-%s.log" % (slot, time.strftime("%Y%m%d-%H%M%S"))))
     trace.line("input", "brief=%s tools=%s slot=%s cases=%s workdir=%s" % (brief, api, slot, cases, work))
+    left_over = [f for f in ARTIFACTS if (work / f).exists()]
+    trace.line("clean", "workdir at start: %s; earlier artifacts present: %s" % (sorted(x.name for x in work.iterdir()), left_over or "none"))
+    if left_over:
+        raise SystemExit("not a clean start: %s" % left_over)
     t0 = time.time()
     try:
         asyncio.run(run_phases(work, slot, t0 + minutes * 60, trace))
