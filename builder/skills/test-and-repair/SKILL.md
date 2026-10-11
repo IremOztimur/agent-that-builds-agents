@@ -16,7 +16,7 @@ Repeat rounds while there is time, but `practice.py` decides when to stop: it pr
 5. Fix at the layer the tag names, as a rule about calls that holds for every customer, product, amount and date. Never put a customer's id, name, amount or date in the workflow. NOT_ENFORCED, STATE: structure or code. SPEECH_CONTENT, SPEECH_ORDER: the policy slice of the node that owns the step, or a code-computed fact it shows. VISIBLE_CALL: intent through an extraction slot, one write by code. Keep `design.json` true.
 6. Publish and rerun everything. Keep the change only if the failures went down and nothing that passed now fails. Otherwise restore the previous version and try a different fix for the same cause.
 7. Next round, unless `practice.py` said STOP.
-8. Once, when a full round has at most two failures or two rounds are done and at least 8 minutes are left: one round with `--style talkative` on every customer. It is reported, not counted. Hidden customers talk like people; repair only what shows a rule about calls.
+8. Once, when a full round has at most two failures or two rounds are done and at least 8 minutes are left: one round with `--style talkative` on every customer. It is reported, not counted. Hidden customers talk like people; repair only what shows a rule about calls, publish, then run one full round to measure it (allowed even after STOP, because the workflow changed). Only a measured version can ship.
 
 Finish with the best version in `workflow.json`, published, and `report.md`: score per version, causes, what still fails.
 `python3 tools/run_code.py` runs one code snippet locally if you need to check a calculation.

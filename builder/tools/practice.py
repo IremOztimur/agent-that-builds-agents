@@ -225,7 +225,7 @@ def run(argv):
     rules = json.load(open(WORK / "rules.json"))["rules"]
     only = opt["--only"].split(",") if opt.get("--only") else None
     if not style and (only is None or set(only) >= set(scope)):
-        stop = stoprule.verdict(rounds(), scope)
+        stop = None if stoprule.needs_measuring(rounds(), scope, current_pub()) else stoprule.verdict(rounds(), scope)
         if stop:
             event("repair", "refused to start another full round: " + stop)
             sys.exit("No further full round: " + stop)

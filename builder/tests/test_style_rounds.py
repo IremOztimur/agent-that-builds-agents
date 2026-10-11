@@ -11,4 +11,9 @@ full = stoprule.full_rounds(log, ALL)
 assert len(full) == 1 and full[0]["failed"] == {"a", "b"}, full
 assert stoprule.best(log, ALL)["name"] == "r1"
 assert stoprule.is_dead([1, 1, 0, 1]) and not stoprule.is_dead([1, 5, 1, 1]) and not stoprule.is_dead([1, 1])   # one slow customer is not an outage
+# a workflow changed after the last full round is measured once, even when that round was clean
+clean = [{"name": "r2", "only": None, "failed": [], "total": 5, "pub": 4}]
+assert stoprule.verdict(clean, ALL).startswith("STOP")
+assert not stoprule.needs_measuring(clean, ALL, 4) and stoprule.needs_measuring(clean, ALL, 5)
+assert not stoprule.needs_measuring([], ALL, 1)
 print("ok: style rounds")

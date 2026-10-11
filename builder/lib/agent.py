@@ -8,7 +8,7 @@ from .workdir import SKILLS, sealed_dir
 
 ABS = re.compile(r"(?<![\w.])/(?:Users|private|var|tmp|home|opt|etc)/[^\s'\"`;|&)<>]+")
 
-SELFTEST = re.compile(r"python3?\s+tools/(practice|check_rules|lint|publish|run_code)\.py[^\n;&|]*")
+SELFTEST = re.compile(r"python3?\s+tools/(practice|check_rules|check_expectations|check_workflow|check_design|lint|publish|run_code)\.py[^\n;&|]*")
 
 
 class Session:
@@ -47,17 +47,18 @@ class Session:
                         for path in ABS.findall(text):
                             if not path.startswith(self.home) and "/.claude/projects/" not in path and not path.startswith(("/tmp/", "/dev/")):
                                 self.trace.line("OUTSIDE", "%s reached outside its folder: %s" % (b.name, path[:160]))
-                        found = SELFTEST.search(str(b.input.get("command", ""))) if b.name == "Bash" else None
+                        found = [f.group(0).strip()[:140] for f in SELFTEST.finditer(str(b.input.get("command", "")))] if b.name == "Bash" else []
                         if found:
-                            tests[b.id] = found.group(0).strip()[:140]
-                            self.trace.line("selftest", "started: " + tests[b.id])
+                            tests[b.id] = " && ".join(found)          # one command can chain several tools: every one is named, the result belongs to all of them
+                            for f in found:
+                                self.trace.line("selftest", "started: " + f)
                     what = ", ".join("%s %s" % (b.name, str(b.input.get("skill") or b.input.get("file_path") or b.input.get("command") or "")[:70]) for b in uses)
                     self.trace.line("model", "%s: %s" % (getattr(m, "model", self.model), what or (texts[0][:100] if texts else "")))
                 elif isinstance(m, UserMessage) and isinstance(m.content, list):
                     for b in m.content:
                         if isinstance(b, ToolResultBlock) and b.tool_use_id in tests:
                             out = b.content if isinstance(b.content, str) else " ".join(str(x.get("text", "")) for x in (b.content or []) if isinstance(x, dict))
-                            tail = " ".join(out.split())[-260:]
+                            tail = " ".join(out.split())[-420:]
                             self.trace.line("selftest", "result of %s -> %s%s" % (tests.pop(b.tool_use_id), "ERROR " if b.is_error else "", tail))
                 elif isinstance(m, ResultMessage):
                     self.trace.line("phase", "phase %d turn finished: %d turns so far, $%.2f" % (phase, m.num_turns, m.total_cost_usd or 0))

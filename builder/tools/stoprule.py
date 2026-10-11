@@ -54,3 +54,10 @@ def verdict(rounds, all_ids):
     if len(full) >= MAX_ROUNDS:
         return "STOP: %d rounds are used (%d of %d pass). Finish with the best version." % (len(full), total - n, total)
     return None
+
+
+def needs_measuring(rounds, all_ids, pub):
+    """True when the workflow published now is not the one the last full round measured. A repair that was never measured is wasted:
+    the best measured version is what ships, so a changed workflow always gets one full round (the round cap still holds)."""
+    full = full_rounds(rounds, all_ids)
+    return bool(full) and full[-1].get("pub") != pub and len(full) < MAX_ROUNDS
