@@ -201,18 +201,29 @@ def all_cases():
     if not FINAL:
         return json.load(open(SEALED / "public-test-set.json"))
     return [{**t, "level": t.get("level", ""), "brief": "final", "family": t.get("family", t["id"]), "identity": {},
-             "ledger_id": t.get("ledger_id") or t["variables"].get("customerNumber") or t["variables"].get("customer_id")} for t in json.load(open(WORK / "topics.json"))]
+             "ledger_id": t.get("ledger_id") or t["id"]} for t in json.load(open(WORK / "topics.json"))]
 
 
-def mock(path, body=None):
-    """The mock's own endpoints: GET /_ledger/<id> (what it received), POST /_reset/<id> (start clean)."""
-    import urllib.request
-    req = urllib.request.Request(inputs.meta()["mock_url"] + path, data=json.dumps(body or {}).encode() if body is not None else None,
-                                 headers={"user-agent": "agent-that-builds-agents/1", "content-type": "application/json"}, method="POST" if body is not None else "GET")
-    try:
-        return json.load(urllib.request.urlopen(req, timeout=20))
-    except Exception as e:
-        return {"error": "the mock did not answer %s: %s" % (path, str(e)[:120])}
+def calls_made(call_id):
+    """The bank calls of one conversation, read from the platform's own call log: [{"tool", "args"}]. The tool is the last part of the URL
+    (the service name in the contract); the arguments are the request body with its `data` object opened up. The mock keeps no state."""
+    out = []
+    if not call_id:
+        return out
+    for m in freya.get_call(call_id)["messages"]:
+        if m["role"] in ("assistant", "user"):
+            continue
+        try:
+            ev = json.loads(m["message"])
+        except Exception:
+            continue
+        args = ev.get("args") or {}
+        if ev.get("event") != "function_call_start" or not args.get("url"):
+            continue
+        body = args.get("body") if isinstance(args.get("body"), dict) else {}
+        flat = {**body, **(body.get("data") if isinstance(body.get("data"), dict) else {})}
+        out.append({"tool": oracle.tool_name(args["url"]), "args": flat})
+    return out
 
 
 def scored_cases(cases):
@@ -265,8 +276,6 @@ def run(argv):
             sys.exit("No further full round: " + stop)
     ids = personas_for(cases, talk)
     if FINAL:
-        for c in cases:
-            mock("/_reset/" + str(c["ledger_id"]), {})
         sessions = {c["id"]: dict(c["variables"]) for c in cases}
     else:
         sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
@@ -277,9 +286,8 @@ def run(argv):
     for c in cases:
         r = runs.get(ids[c["id"]], {})
         if FINAL:
-            led = mock("/_ledger/" + str(c["ledger_id"]))
-            led.setdefault("calls", [])
-            res = {"pass": False, "failed": oracle.final_score(c["expected"], led)}
+            led = {"calls": calls_made(r.get("callId"))}
+            res = {"pass": False, "failed": oracle.final_score({k: v for k, v in c["expected"].items() if k != "state"}, led)}
         else:
             led = score.http("/v1/practice/ledger/" + sessions[c["id"]]["customer_id"])
             res = score.score_ledger(c, led)
@@ -312,8 +320,6 @@ def chat(argv):
     and fails when a reply is missing, slow or an error. Run it after publishing, before anything else: it finds a broken opening in seconds."""
     case = all_cases()[0]
     variables = dict(case["variables"]) if FINAL else score.http("/v1/practice/sessions", {"case": case["id"]})["variables"]
-    if FINAL:
-        mock("/_reset/" + str(case["ledger_id"]), {})
     state = json.load(open(os.environ["BUILDER_SLOT_STATE"]))[os.environ["BUILDER_SLOT"]]
     call_id, bad = None, False
     for msg in ["Hello?", "Yes, speaking.", "Yes, that is me. Go ahead."]:

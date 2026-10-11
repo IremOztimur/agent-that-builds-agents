@@ -58,4 +58,12 @@ assert any(p.startswith("forbidden call get_statement") for p in oracle.final_sc
 assert any(p.startswith("state outcome") and "plan" not in p.split("agent left")[0] for p in oracle.final_score(E, {**ok, "state": {"outcome": "refused"}}))
 assert oracle.final_score(E, {"error": "the mock did not answer"})[0].startswith("ledger:")
 assert oracle.persona({"id": "T1", "title": "t", "script": "Ayşe Hanım, kartı için..."}, E, ("talkative", "HOW YOU TALK: x"))["prompt"].count("Ayşe Hanım") == 1
+# the service a call went to, and a big data file that stays out of the corpus
+assert oracle.tool_name("https://m.workers.dev/voice/v1/cards.list") == "cards.list" and oracle.tool_name("https://m/x/statement.week.change?a=1") == "statement.week.change"
+big = pathlib.Path(tempfile.mkdtemp()) / "c"; big.mkdir()
+(big / "BRIEF.md").write_text("kural\n")
+(big / "records.json").write_text(json.dumps({"customers": [{"n": i, "pad": "x" * 200} for i in range(400)]}, indent=1))
+o2 = pathlib.Path(tempfile.mkdtemp()); info2 = intake.ingest_folder(big, o2)
+assert info2["data"] == ["records.json"] and len((o2 / "corpus.md").read_text().splitlines()) < 60, info2
+assert (o2 / "original" / "records.json").exists()
 print("ok: final mode")

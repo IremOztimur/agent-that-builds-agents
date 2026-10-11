@@ -63,6 +63,11 @@ def _args_match(want, got):
     return all(k in got and _same(v, got[k]) for k, v in (want or {}).items())
 
 
+def tool_name(url):
+    """The service a URL calls: its last path segment (`.../voice/v1/cards.list` -> `cards.list`)."""
+    return str(url).split("?")[0].rstrip("/").split("/")[-1]
+
+
 def final_score(e, ledger):
     """Failed checks of one customer against a mock's ledger {"calls": [{"tool", "args"}], "state": {...}}.
     Every expected call must be there once (the arguments that matter match); a tool named in `calls` must not be called more often than expected;

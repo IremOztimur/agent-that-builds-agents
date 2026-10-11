@@ -2,8 +2,10 @@
 A single brief file plus a tool API file (development), or a case folder of documents (the final): Markdown, text, Word, Excel, PDF, images."""
 import json, pathlib, re, sys, zipfile
 
-TEXT = {".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".htm", ".xml", ".tsv"}
+TEXT = {".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".htm", ".xml", ".tsv", ".js", ".ts", ".py", ".toml", ".ini", ".sql"}
 IMAGES = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+DATA = {".json", ".csv", ".tsv", ".xml"}
+BIG = 40_000            # a data file above this many bytes is listed, not inlined: nobody reads 700 KB of records line by line
 FIRST = ["brief.md", "readme.md"]          # the case folder says: read BRIEF.md first, README.md says what each document is
 
 
@@ -102,7 +104,7 @@ def ingest_folder(folder, dest):
         sys.exit("the case folder %s has no documents" % folder)
     dest = pathlib.Path(dest)
     (dest / "original").mkdir(parents=True, exist_ok=True)
-    parts, documents, unconverted, visual, contract = [], [], [], [], None
+    parts, documents, unconverted, visual, data, contract = [], [], [], [], [], None
     for f in files:
         rel = str(f.relative_to(root))
         target = dest / "original" / rel
@@ -115,6 +117,11 @@ def ingest_folder(folder, dest):
         if text is None or not text.strip():
             unconverted.append(rel)
             continue
+        if f.suffix.lower() in DATA and len(text) > BIG:
+            data.append(rel)
+            head = "\n".join(text.strip().splitlines()[:25])
+            parts.append("=== FILE: %s ===\n(data file, %d bytes, not copied here: open input/original/%s and look up what you need. It starts:)\n%s\n" % (rel, len(text), rel, head))
+            continue
         parts.append("=== FILE: %s ===\n%s\n" % (rel, text.strip()))
         if f.suffix.lower() == ".json" and contract is None:
             try:
@@ -126,4 +133,4 @@ def ingest_folder(folder, dest):
     if not parts and not visual:
         sys.exit("no document in %s could be read" % folder)
     (dest / "corpus.md").write_text("\n".join(parts) or "(no document had a text copy; read the documents listed under visual)\n")
-    return {"corpus": "input/corpus.md", "documents": documents, "unconverted": unconverted, "visual": visual, "contract": contract}
+    return {"corpus": "input/corpus.md", "documents": documents, "unconverted": unconverted, "visual": visual, "data": data, "contract": contract}

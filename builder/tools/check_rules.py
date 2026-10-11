@@ -99,8 +99,15 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
             continue
         if not any(t in q or (len(q) >= 12 and q in t) for q in quotes):
             uncovered.append("line %d: %s" % (i, line.strip()[:90]))
-    for u in uncovered[:40]:
-        warn.append("not covered by any rule (add a rule, or list the line under skipped_lines with a reason): " + u)
+    if inputs.mode() == "final":
+        # a case folder is mostly mails and transcripts: talk, not rules. Say how much is unquoted, do not ask for a rule per line
+        nums = [w for w in warn if w.startswith("number/date")]
+        warn = [w for w in warn if not w.startswith("number/date")]
+        if nums or uncovered:
+            warn.append("%d lines and %d numbers or dates of the documents are quoted by no rule. Most is talk; make sure every decision, limit, date rule and wording that governs the call has a rule" % (len(uncovered), len(nums)))
+    else:
+        for u in uncovered[:40]:
+            warn.append("not covered by any rule (add a rule, or list the line under skipped_lines with a reason): " + u)
     live = [r for r in rules if r.get("status") in LIVE]
     print("rules: %d (%d live)" % (len(rules), len(live)))
     for w in warn[:60]:

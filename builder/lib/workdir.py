@@ -17,7 +17,7 @@ def prepare(brief, api, cases, dev=False):
         info = intake.ingest_folder(brief, work / "input")
         text = (work / "input" / "corpus.md").read_text()
         meta = {"mode": "final", "brief": info["corpus"], "tools": info["contract"], "base_url": api.rstrip("/"), "mock_url": api.rstrip("/"),
-                "brief_lines": len(text.splitlines()), "documents": info["documents"], "unconverted": info["unconverted"], "visual": info["visual"], "cases": None, "dev": False}
+                "brief_lines": len(text.splitlines()), "documents": info["documents"], "unconverted": info["unconverted"], "visual": info["visual"], "data": info["data"], "cases": None, "dev": False}
         (work / "inputs.json").write_text(json.dumps(meta))
         return _finish(work, final=True)
     text = intake.brief_text(brief)
