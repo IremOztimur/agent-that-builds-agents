@@ -21,3 +21,6 @@ dev/out/
 # runs: the evidence of one run is committed only for the final submission (git add -f submission/<name>.workflow.json traces/<name>.log)
 submission/
 traces/
+
+# wrangler local state
+.wrangler/
