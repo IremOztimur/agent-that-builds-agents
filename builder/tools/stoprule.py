@@ -4,6 +4,11 @@ A round is a full run of every practice customer. A customer that failed but pas
 failure. The stop rule exists to prevent overfitting: once the agent is strong and a repair did not reduce the failures, more repairs
 would target single customers' wording instead of a rule of the brief.
 """
+def is_dead(said_counts):
+    """True when the platform answered nothing: in every call the agent said at most its opening line. A workflow does not do that to every customer."""
+    return len(said_counts) >= 3 and all(n <= 1 for n in said_counts)
+
+
 STRONG = 0.8        # share of customers that must pass for "already strong"
 MAX_ROUNDS = 4
 

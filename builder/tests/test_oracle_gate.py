@@ -47,5 +47,6 @@ assert any("promise needs" in p for p in check_expectations.problems({"T1": E, "
 for cases in ("A", "B", "AB"):
     for t in workdir.topics(cases):
         assert not {"expected", "checks", "identity"} & set(t), t
+assert [p["id"] for p in workdir.topics("AB")[10]["products"]] == ["p1", "p2", "p3"]       # the bank's product ids
 assert len(workdir.topics("AB")) == 13 and len(workdir.topics("A")) == 10 and len(workdir.topics("B")) == 3
 print("ok: oracle gate")

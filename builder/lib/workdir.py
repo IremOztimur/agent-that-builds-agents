@@ -40,7 +40,9 @@ def topics(cases):
     out = []
     for c in json.loads((KIT / "public-test-set.json").read_text()):
         if cases == "AB" or c["brief"] == cases:
-            out.append({**{k: c[k] for k in keep if k in c}, "now": c.get("variables", {}).get("now")})
+            t = {k: c[k] for k in keep if k in c}
+            t["products"] = [{"id": "p%d" % (i + 1), **p} for i, p in enumerate(c["products"])]     # the bank names them p1, p2, ... in this order
+            out.append({**t, "now": c.get("variables", {}).get("now")})
     return out
 
 

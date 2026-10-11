@@ -2,6 +2,7 @@
 
     python3 tools/practice.py run <agent_id> --brief A|B|AB [--only ID,ID] [--style S] --name r1
     python3 tools/practice.py show r1 [ID ...]
+    python3 tools/practice.py chat                        three live customer turns against the published workflow
 
 `run` plays the customers against your published agent in text, scores them from the bank's ledger and a judge, and prints
 for each customer: pass or fail, the tool calls made, and for a failure WHICH part was wrong (outcome, promises, notes,
@@ -207,9 +208,9 @@ def scored_cases(cases):
     return {c["id"]: {**c, "expected": oracle.to_expected(exp[c["id"]]), "checks": oracle.checks(exp[c["id"]])} for c in cases}, exp
 
 
-def spoken(call_id):
-    """Everything the agent said in one call."""
-    return " ".join(m["message"] for m in freya.get_call(call_id)["messages"] if m["role"] == "assistant") if call_id else ""
+def said_by_agent(call_id):
+    """What the agent said in one call, message by message."""
+    return [m["message"] for m in freya.get_call(call_id)["messages"] if m["role"] == "assistant"] if call_id else []
 
 
 def run(argv):
@@ -233,7 +234,7 @@ def run(argv):
     t0 = time.time()
     sim_id = start(agent, {ids[c["id"]]: sessions[c["id"]] for c in cases})
     runs = {r["personaId"]: r for r in collect(sim_id, len(cases), 420)}
-    rows = []
+    rows, said_counts = [], []
     for c in cases:
         r = runs.get(ids[c["id"]], {})
         led = score.http("/v1/practice/ledger/" + sessions[c["id"]]["customer_id"])
@@ -242,18 +243,61 @@ def run(argv):
             res["failed"].append("conversation: [unfinished] the call did not finish in time")
         elif r.get("outcome") != "pass":
             res["failed"].append("conversation: [%s] %s" % (r.get("outcome"), " ".join(str(r.get("reason") or "no verdict").split())[:500]))
+        said = said_by_agent(r.get("callId"))
+        said_counts.append(len(said))
         wrong_record = any(f.split(" ")[0] in ("outcome", "promises", "notes", "callbacks", "transfers") for f in res["failed"])
-        missed = [] if wrong_record else oracle.wording_misses(derived[c["id"]], rules, spoken(r.get("callId")))   # wording said after a record that never happened is a symptom
+        missed = [] if wrong_record else oracle.wording_misses(derived[c["id"]], rules, " ".join(said))   # wording said after a record that never happened is a symptom
         if missed:
             res["failed"].append("conversation: [wording] rules " + ", ".join(missed))
         rows.append({"id": c["id"], "level": c["level"], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),
                      "tools": [x["tool"] for x in led["calls"]], "customer_id": sessions[c["id"]]["customer_id"]})
+    if stoprule.is_dead(said_counts):
+        event("platform", "DEAD ROUND: in all %d calls the agent said nothing after its opening line, so the model service is not answering; the round is not recorded" % len(said_counts))
+        sys.exit("PLATFORM: in every call the agent said nothing after its opening line. That is the model service not answering, not your workflow; this round is not recorded. "
+                 "Check with `python3 tools/practice.py chat`, wait a minute if it fails, and run the round again. Do not repair anything for this.")
     n = sum(x["pass"] for x in rows)
     out = SEALED / "results" / (name + ".json")
     json.dump({"simulation_id": sim_id, "seconds": round(time.time() - t0), "passed": n, "total": len(rows), "runs": 1, "rows": rows}, open(out, "w"), indent=1)
     summary(json.load(open(out)))
     print("run took %d s" % (time.time() - t0))
     judge_progress(name, json.load(open(out)), only, scope, style)
+
+
+def chat(argv):
+    """A live conversation with the published workflow: three customer turns on a practice customer. Shows every reply and how long it took,
+    and fails when a reply is missing, slow or an error. Run it after publishing, before anything else: it finds a broken opening in seconds."""
+    case = json.load(open(SEALED / "public-test-set.json"))[0]
+    variables = score.http("/v1/practice/sessions", {"case": case["id"]})["variables"]
+    state = json.load(open(os.environ["BUILDER_SLOT_STATE"]))[os.environ["BUILDER_SLOT"]]
+    call_id, bad = None, False
+    for msg in ["Hello?", "Yes, speaking.", "Yes, that is me. Go ahead."]:
+        body = {"workflowId": state["workflow_id"], "message": msg, "customerVariables": variables}
+        if call_id:
+            body["callId"] = call_id
+        t0 = time.time()
+        try:
+            out = freya.api("POST", "/api/v2/chat/message", body)
+        except Exception as e:
+            print("CUSTOMER:", msg, "\nNO REPLY after %.0f s: %s" % (time.time() - t0, str(e)[:200]))
+            bad = True
+            break
+        call_id = out.get("callId", call_id)
+        reply = out.get("response")
+        print("CUSTOMER:", msg, "\nAGENT (%.1f s):" % (time.time() - t0), reply)
+        if not reply or time.time() - t0 > 40:
+            bad = True
+        if out.get("endedByAgent"):
+            print("   [the agent ended the call]")
+            break
+    if call_id:
+        try:
+            freya.api("POST", "/api/v2/chat/end", {"callId": call_id})
+        except Exception:
+            pass
+    if bad:
+        event("platform", "chat check failed: a reply was missing or slow")
+        sys.exit("CHAT CHECK FAILED: a reply is missing or slow. If a stripped-down workflow answers just as badly, the platform is down: wait and run it again; do not repair the workflow for it.")
+    print("chat check ok")
 
 
 def show(argv):
@@ -291,4 +335,4 @@ def show(argv):
 
 
 if __name__ == "__main__":
-    {"run": run, "show": show}[sys.argv[1]](sys.argv[2:])
+    {"run": run, "show": show, "chat": chat}[sys.argv[1]](sys.argv[2:])
