@@ -7,6 +7,7 @@ from .paths import ROOT, SLOTS
 from .trace import Trace
 
 
+RESERVE = 90          # seconds kept for the final lint, publish and export, so the whole run stays inside --minutes
 ARTIFACTS = ["rules.json", "design.json", "workflow.json", "scores.json", "repairs.md", "report.md"]
 
 
@@ -48,7 +49,7 @@ def build(brief, api, slot, cases, minutes, prepare_only=False, fresh=False, dev
     trace.line("slot", "%s: %s at the start of the run" % (slot, "already exists on Freya, will be updated in place" if existed else "does not exist yet, will be created"))
     t0 = time.time()
     try:
-        asyncio.run(run_phases(work, slot, t0 + minutes * 60, trace))
+        asyncio.run(run_phases(work, slot, t0 + minutes * 60 - RESERVE, trace))
     finally:
         result = finalize.finalize(work, slot, trace, existed)
         trace.line("end", "%s, build time %.1f min" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), (time.time() - t0) / 60))

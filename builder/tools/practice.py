@@ -235,7 +235,8 @@ def run(argv):
             res["failed"].append("conversation: [unfinished] the call did not finish in time")
         elif r.get("outcome") != "pass":
             res["failed"].append("conversation: [%s] %s" % (r.get("outcome"), " ".join(str(r.get("reason") or "no verdict").split())[:500]))
-        missed = oracle.wording_misses(derived[c["id"]], rules, spoken(r.get("callId")))
+        wrong_record = any(f.split(" ")[0] in ("outcome", "promises", "notes", "callbacks", "transfers") for f in res["failed"])
+        missed = [] if wrong_record else oracle.wording_misses(derived[c["id"]], rules, spoken(r.get("callId")))   # wording said after a record that never happened is a symptom
         if missed:
             res["failed"].append("conversation: [wording] rules " + ", ".join(missed))
         rows.append({"id": c["id"], "level": c["level"], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),

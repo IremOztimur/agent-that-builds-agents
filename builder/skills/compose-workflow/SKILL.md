@@ -19,7 +19,8 @@ Read completely before designing: `docs/workflow-format.md`, `docs/tools-and-cod
    - counters live in `vars`, changed only by code, never by the prompt: the engine's `_failure_count`, `{{node.total_turns}}`, or your own
    - a rule that limits what the agent may offer (attempts, offers, asks): code computes the allowed set and what is left, the prompt shows it as a constraint ("allowed: ...; nothing else"), a transition ends the stage when none is left
    - close: the lifecycle `end_of_call` close tool, outcome and reason from `vars`; hang up with `end_call`
-   - every conversation node gets `max_node_turns` and a `max_turn_transition`
-4. `python3 tools/lint.py workflow.json`, then `python3 tools/publish.py workflow.json`.
+   - every conversation node gets `max_node_turns` (at most 15) and a `max_turn_transition`: a stuck loop must end in a few turns
+   - a read-back or confirmation shows what the customer just said. A value the customer gave and the code did not capture is asked for again; it is never replaced by an earlier value or a default. A date the customer says in words ("the twenty sixth", "next Friday") is declared `type: "date"` in the extraction schema, and the code checks that it arrived
+4. `python3 tools/lint.py workflow.json`, `python3 tools/check_design.py`, then `python3 tools/publish.py workflow.json`. Fix every FAIL before you finish: the phase gate runs the same checks.
 
-Done when both are clean, publish shows no READBACK line, and design.json is complete.
+Done when all three are clean, publish shows no READBACK line, and design.json is complete.

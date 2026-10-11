@@ -28,6 +28,9 @@ def code_strings(node):
                 yield "%s.%s" % (f.get("name"), h), c[h]
 
 
+MAX_TURNS = 15       # most user turns one conversation node may spend
+
+
 def lint(wf, base_url=None):
     bad, warn = [], []
     nodes = wf.get("nodes", {})
@@ -50,7 +53,9 @@ def lint(wf, base_url=None):
         if n.get("pre_actions") and t == "conversation":
             bad.append("%s: pre_actions on a conversation node are silently dropped" % name)
         if t == "conversation" and not n.get("max_turn_transition"):
-            warn.append("%s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
+            bad.append("%s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
+        if t == "conversation" and int(n.get("max_node_turns", 10)) > MAX_TURNS:
+            bad.append("%s: max_node_turns is %s; at most %d, so a stuck loop ends in a few turns" % (name, n.get("max_node_turns"), MAX_TURNS))
         for es in n.get("extraction_schema", []):
             if "min_confidence" not in es:
                 bad.append("%s: extraction variable %s has no min_confidence (the default 0.95 silently discards values)" % (name, es.get("name")))
