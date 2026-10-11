@@ -12,6 +12,5 @@ build-the-builder_pack/scratch/
 background_reading.pdf
 eval/out/
 builder/.slots.json
-traces/
 submission/*/
 builder/.personas.json

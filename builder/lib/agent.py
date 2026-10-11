@@ -6,6 +6,9 @@ from .paths import SLOTS
 from .workdir import SKILLS, sealed_dir
 
 
+SELFTESTS = ("practice.py", "check_rules", "lint.py", "publish.py", "run_code")
+
+
 class Session:
     def __init__(self, work, slot, deadline, trace):
         from claude_agent_sdk import ClaudeAgentOptions, ClaudeSDKClient
@@ -15,7 +18,7 @@ class Session:
             cwd=work, model=self.model, skills=SKILLS, setting_sources=["project"],
             allowed_tools=["Read", "Write", "Edit", "Glob", "Grep", "Bash"], permission_mode="dontAsk", max_turns=200,
             env={"BASH_DEFAULT_TIMEOUT_MS": "900000", "BASH_MAX_TIMEOUT_MS": "1200000", "CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1",
-                 "BUILDER_SLOT": slot, "BUILDER_SLOT_STATE": str(SLOTS), "BUILDER_DEADLINE": str(deadline), "BUILDER_SEALED": str(sealed_dir(work))}))
+                 "BUILDER_SLOT": slot, "BUILDER_SLOT_STATE": str(SLOTS), "BUILDER_DEADLINE": str(deadline), "BUILDER_SEALED": str(sealed_dir(work)), "BUILDER_TRACE": str(trace.path)}))
 
     async def __aenter__(self):
         await self.client.connect()
@@ -27,8 +30,8 @@ class Session:
 
     async def send(self, prompt, phase):
         """Sends one prompt and waits until the agent stops or the clock ends. Returns what it read (paths and commands, lower-case)."""
-        from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolUseBlock
-        seen = []
+        from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolResultBlock, ToolUseBlock, UserMessage
+        seen, tests = [], {}
 
         async def consume():
             async for m in self.client.receive_response():
@@ -37,13 +40,22 @@ class Session:
                     texts = [b.text for b in m.content if isinstance(b, TextBlock)]
                     for b in uses:
                         seen.append(" ".join(str(v) for v in b.input.values()).lower())
-                        if b.name == "Bash" and any(k in str(b.input.get("command", "")) for k in ("practice.py", "check_rules", "lint.py", "publish.py", "run_code")):
-                            self.trace.line("selftest", str(b.input.get("command"))[:200])
+                        cmd = str(b.input.get("command", ""))
+                        if b.name == "Bash" and any(k in cmd for k in SELFTESTS):
+                            tests[b.id] = cmd.splitlines()[0][:120] if cmd.strip() else cmd
+                            self.trace.line("selftest", "started: " + tests[b.id])
                     what = ", ".join("%s %s" % (b.name, str(b.input.get("skill") or b.input.get("file_path") or b.input.get("command") or "")[:70]) for b in uses)
                     self.trace.line("model", "%s: %s" % (getattr(m, "model", self.model), what or (texts[0][:100] if texts else "")))
+                elif isinstance(m, UserMessage) and isinstance(m.content, list):
+                    for b in m.content:
+                        if isinstance(b, ToolResultBlock) and b.tool_use_id in tests:
+                            out = b.content if isinstance(b.content, str) else " ".join(str(x.get("text", "")) for x in (b.content or []) if isinstance(x, dict))
+                            tail = " ".join(out.split())[-260:]
+                            self.trace.line("selftest", "result of %s -> %s%s" % (tests.pop(b.tool_use_id), "ERROR " if b.is_error else "", tail))
                 elif isinstance(m, ResultMessage):
                     self.trace.line("phase", "phase %d turn finished: %d turns so far, $%.2f" % (phase, m.num_turns, m.total_cost_usd or 0))
 
+        self.trace.line("model", "%s asked: %s" % (self.model, prompt[:200]))
         await self.client.query(prompt)
         try:
             await asyncio.wait_for(consume(), timeout=max(30, self.deadline - time.time()))

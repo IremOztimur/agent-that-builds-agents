@@ -73,10 +73,45 @@ def personas_for(cases, style):
     return {c["id"]: ids[key[c["id"]]] for c in cases}
 
 
+def event(kind, text):
+    """Adds a line to the builder's trace (the file named in $BUILDER_TRACE)."""
+    path = os.environ.get("BUILDER_TRACE")
+    if path:
+        with open(path, "a") as f:
+            f.write("%s | %-8s | %s\n" % (time.strftime("%H:%M:%S"), kind, str(text).replace("\n", " ")[:400]))
+
+
+def heal():
+    """The platform allows one running simulation per workspace and sometimes leaves one at `running` after every call has ended.
+    Marks such stuck simulations completed. Returns (names healed, names that really are still running)."""
+    sims = freya.api("GET", "/api/v2/simulations", workspaceId=freya.workspace_id())
+    sims = sims.get("simulations") or sims.get("items") or sims
+    healed, blocking = [], []
+    for s in sims:
+        if s.get("status") != "running":
+            continue
+        its = freya.api("GET", "/api/v2/simulations/%s/iterations" % s["id"])
+        its = its.get("iterations") or its
+        runs = freya.get_iteration(s["id"], its[0]["id"])["runs"] if its else []
+        if runs and all(r.get("endedAt") or r.get("outcome") in ("pass", "fail", "inconclusive") for r in runs):
+            try:
+                freya.api("PUT", "/api/v2/simulations/%s" % s["id"], {"status": "completed"})
+                healed.append(s["name"])
+            except RuntimeError as e:
+                blocking.append("%s (could not be marked completed: %s)" % (s["name"], str(e)[:100]))
+        else:
+            blocking.append(s["name"])
+    return healed, blocking
+
+
 def start(agent, variables):
-    """Start a text simulation. A workspace runs one at a time: wait for the running one, but not forever."""
-    t0 = time.time()
+    """Starts a text simulation. If the one-at-a-time limit blocks it: heal stuck simulations, wait at most 60 s, and say so (also in the trace)."""
+    t0, told = time.time(), False
     while True:
+        healed, blocking = heal()
+        if healed:
+            event("platform", "healed simulation(s) stuck at running although every call had ended: " + ", ".join(healed))
+            print("healed stuck simulation(s):", ", ".join(healed))
         try:
             body = {"agentId": agent, "name": "cases " + time.strftime("%H:%M:%S"), "mode": "chat", "selectedPersonaIds": list(variables),
                     "customerVariablesMap": variables, "maxConcurrentCalls": 5, "runsPerPersona": 1, "maxCallDurationSeconds": 300,
@@ -85,9 +120,17 @@ def start(agent, variables):
             sim = freya.api("POST", "/api/v2/simulations", body)
             return (sim.get("simulation") or sim)["id"]
         except RuntimeError as e:
-            if "concurrent simulations" not in str(e) or time.time() - t0 > 240:
+            msg = str(e)
+            if "Maximum" not in msg and "concurrent" not in msg.lower():
                 raise
-            time.sleep(15)
+            if not told:
+                told = True
+                event("platform", "BLOCKED by the one-simulation-at-a-time limit (running: %s): %s" % (", ".join(blocking) or "unknown", msg[:160]))
+                print("The platform runs one simulation at a time and one is still running: %s. Waiting up to 60 s." % (", ".join(blocking) or "unknown"))
+            if time.time() - t0 > 60:
+                event("platform", "gave up after 60 s: the one-simulation-at-a-time limit was not released")
+                sys.exit("BLOCKED: no simulation could start in 60 s because another one is still running (%s). This is the platform limit, not a fault of your workflow." % (", ".join(blocking) or "unknown"))
+            time.sleep(10)
 
 
 def collect(sim_id, want, limit):

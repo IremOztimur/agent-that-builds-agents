@@ -36,9 +36,10 @@ def build(brief, api, slot, cases, minutes, prepare_only=False):
     (ROOT / "traces").mkdir(exist_ok=True)
     trace = Trace(ROOT / "traces" / ("%s-%s.log" % (slot, time.strftime("%Y%m%d-%H%M%S"))))
     trace.line("input", "brief=%s tools=%s slot=%s cases=%s workdir=%s" % (brief, api, slot, cases, work))
+    t0 = time.time()
     try:
-        asyncio.run(run_phases(work, slot, time.time() + minutes * 60, trace))
+        asyncio.run(run_phases(work, slot, t0 + minutes * 60, trace))
     finally:
         result = finalize.finalize(work, slot, trace)
-        trace.line("end", time.strftime("%Y-%m-%dT%H:%M:%S%z"))
+        trace.line("end", "%s, build time %.1f min" % (time.strftime("%Y-%m-%dT%H:%M:%S%z"), (time.time() - t0) / 60))
     return work, result
