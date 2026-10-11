@@ -30,7 +30,7 @@ The practice customers for this brief are played against your published agent in
    - Never put a customer id, name, amount or date from the practice set into the workflow. A failure shows that the brief was misread or enforced too weakly; it is not the specification. Re-read the brief rule, work out the correct value yourself from the rule, and implement the rule completely.
    - `NOT_ENFORCED` is fixed by moving the rule into structure or code (a gate, a code node, a hook), not by more prompt text.
 7. **No regressions.** Publish the repaired workflow, save it as `versions/vN.json`, rerun all customers, update `scores.json`. Keep the change only if the targeted failures are fixed and nothing that passed before now fails. Otherwise copy the previous version back to `workflow.json`, publish it again, and note why in `repairs.md`.
-8. **Stop** when everything passes twice in a row, after two repair rounds, or when `tools/clock.py` shows under 6 minutes.
+8. **Stop** when everything passes in a run, after two repair rounds, or when `tools/clock.py` shows under 6 minutes.
 
 ## Finish
 
