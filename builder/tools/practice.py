@@ -1,6 +1,6 @@
 """Run the practice customers and see what happened, never what was expected.
 
-    python3 tools/practice.py run <agent_id> --brief A|B [--only ID,ID] [--style S] --name r1
+    python3 tools/practice.py run <agent_id> --brief A|B|AB [--only ID,ID] [--style S] --name r1
     python3 tools/practice.py show r1 [ID ...]
 
 `run` plays the customers against your published agent in text, scores them from the bank's ledger and a judge, and prints
@@ -155,7 +155,7 @@ def run(argv):
     opt = {rest[i]: rest[i + 1] for i in range(len(rest) - 1) if rest[i].startswith("--")}
     name, style = opt.get("--name", "run"), opt.get("--style")
     cases = [c for c in json.load(open(SEALED / "public-test-set.json"))
-             if (not opt.get("--brief") or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
+             if (opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
     ids = personas_for(cases, style)
     sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
     t0 = time.time()

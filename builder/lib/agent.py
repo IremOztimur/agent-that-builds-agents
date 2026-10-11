@@ -1,12 +1,12 @@
 """One Claude Agent SDK session for the whole build. The harness sends the phase prompts one after another into the same
 conversation, so the agent keeps what it learned in earlier phases; code checks each phase before the next prompt."""
-import asyncio, os, time
+import asyncio, os, re, time
 
 from .paths import SLOTS
 from .workdir import SKILLS, sealed_dir
 
 
-SELFTESTS = ("practice.py", "check_rules", "lint.py", "publish.py", "run_code")
+SELFTEST = re.compile(r"python3?\s+tools/(practice|check_rules|lint|publish|run_code)\.py[^\n;&|]*")
 
 
 class Session:
@@ -40,9 +40,9 @@ class Session:
                     texts = [b.text for b in m.content if isinstance(b, TextBlock)]
                     for b in uses:
                         seen.append(" ".join(str(v) for v in b.input.values()).lower())
-                        cmd = str(b.input.get("command", ""))
-                        if b.name == "Bash" and any(k in cmd for k in SELFTESTS):
-                            tests[b.id] = cmd.splitlines()[0][:120] if cmd.strip() else cmd
+                        found = SELFTEST.search(str(b.input.get("command", ""))) if b.name == "Bash" else None
+                        if found:
+                            tests[b.id] = found.group(0).strip()[:140]
                             self.trace.line("selftest", "started: " + tests[b.id])
                     what = ", ".join("%s %s" % (b.name, str(b.input.get("skill") or b.input.get("file_path") or b.input.get("command") or "")[:70]) for b in uses)
                     self.trace.line("model", "%s: %s" % (getattr(m, "model", self.model), what or (texts[0][:100] if texts else "")))

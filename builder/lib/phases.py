@@ -29,6 +29,7 @@ def gate(n, work, seen):
         import lint
         problems, _, _ = lint.lint(json.load(open(work / "workflow.json")))
         bad += ["lint: " + p for p in problems]
-    if n == 1 and not (work / "design.md").exists():
-        bad.append("design.md does not exist")
+    if n == 1:
+        from . import design
+        bad += design.check(work)
     return bad

@@ -4,7 +4,7 @@ import json, shutil, sys
 from .paths import BUILDER, KIT, ROOT, SLOTS
 from .workdir import sealed_dir
 
-EVIDENCE = ["inputs.json", "rules.json", "design.md", "repairs.md", "report.md", "scores.json"]
+EVIDENCE = ["inputs.json", "rules.json", "design.json", "repairs.md", "report.md", "scores.json"]
 
 
 def finalize(work, slot, trace):
