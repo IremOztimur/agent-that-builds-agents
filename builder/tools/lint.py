@@ -98,12 +98,65 @@ def lint(wf, base_url=None):
     for k in nodes:
         if k not in reach:
             bad.append("%s cannot reach an end_call node or tool" % k)
+    reference_rules(wf, nodes, bad, warn)
     lines = json.dumps(wf, indent=1).count("\n") + 1
     if lines > 900:
         warn.append("workflow is %d lines pretty-printed; the target is about 600. Simplify." % lines)
     elif lines > 700:
         warn.append("workflow is %d lines pretty-printed; the target is about 600." % lines)
     return bad, warn, lines
+
+
+BLANKS_URL = re.compile(r"config\[['\"]url['\"]\]\s*=\s*(''|\"\")")
+
+
+def chain_length(nodes, start):
+    """Most passthrough nodes (code or api_request) one after another from `start`, following every outgoing transition."""
+    def walk(k, seen):
+        n = nodes.get(k, {})
+        if not n.get("passthrough") or k in seen:
+            return 0
+        nxt = [t["target_node"] for t in n.get("transitions", [])] + ([n["passthrough_default_transition"]] if n.get("passthrough_default_transition") else [])
+        return 1 + max([walk(x, seen | {k}) for x in nxt] or [0])
+    return walk(start, set())
+
+
+def reference_rules(wf, nodes, bad, warn):
+    """What docs/workflow-format.md and docs/tools-and-code.md say, as checks."""
+    if wf.get("context_variables"):
+        warn.append("context_variables: a workflow saved over the API came back without this key (workflow-format.md). Put the values in the prompt with {{variable}}")
+    for name, n in nodes.items():
+        t = n.get("node_type")
+        for c in n.get("pre_actions", []):
+            if BLANKS_URL.search(c.get("pre_process_code") or ""):
+                bad.append("%s: a node that runs on entry must make its call. Blanking the url in a pre_actions hook makes the platform log a failed api_call on every pass; "
+                           "skip the node with a transition on a variable instead (tools-and-code.md, \"Use pre_actions when the call must always run\")" % name)
+        if n.get("passthrough") and chain_length(nodes, name) >= 3 and not any(m.get("passthrough") and name in [x["target_node"] for x in m.get("transitions", [])] for m in nodes.values()):
+            bad.append("%s starts a chain of %d passthrough nodes. Optional actions belong in one conversation node with several tools, not in a chain of passthrough nodes (tools-and-code.md)" % (name, chain_length(nodes, name)))
+        if "loop_prompt" in n:
+            bad.append("%s: loop_prompt is rejected by the platform (\"Unrecognized key\") although the docs list it. Put what must change after the first turn into task_message" % name)
+        if n.get("extraction_prompt") or any(e.get("extraction_prompt") and "{{extractor.speech}}" not in e["extraction_prompt"] for e in n.get("extraction_schema", [])):
+            for e in n.get("extraction_schema", []):
+                if e.get("extraction_prompt") and "{{extractor.speech}}" not in e["extraction_prompt"]:
+                    bad.append("%s: extraction_prompt of %s replaces the whole template and must contain {{extractor.speech}}, {{extractor.conversation.last-10}}, {{extractor.type_preamble}} and {{extractor.variables_list}}" % (name, e.get("name")))
+        for e in n.get("extraction_schema", []):
+            if "date" in str(e.get("name", "")).lower() and e.get("type") == "string" and not e.get("enum_values"):
+                warn.append("%s: %s looks like a date but is typed string; declare dates as type \"date\" so the extractor gets today's date" % (name, e.get("name")))
+        if t == "end_call":
+            term = n.get("terminal", {}).get("function", {}).get("parameters", {}).get("properties", {})
+            if (n.get("on_enter") or {}).get("type") not in (None, "silent") and term.get("message_mode", {}).get("default") == "none":
+                bad.append("%s: an end_call node with an on_enter line and message_mode none hangs up silently; put the sentence in spoken_message and set on_enter to silent" % name)
+        if re.search(r"\bnode\b", (n.get("task_message") or "")):
+            warn.append("%s: task_message talks about nodes; the model does not know about nodes and narrates steps that have not happened" % name)
+        for tr in n.get("transitions", []):
+            for grp in tr.get("condition", {}).get("conditions", []):
+                for v in ([grp] if "variable" in grp else grp.get("conditions", [])):
+                    ops = {str(x.get("operand")) for x in ([c for g in tr["condition"]["conditions"] for c in ([g] if "variable" in g else g.get("conditions", []))]) if x.get("variable") == v.get("variable") and x.get("operator") == "equals"}
+                    if ("true" in ops) != ("True" in ops):
+                        warn.append("%s: transition to %s tests %s against only one spelling of a boolean; test both \"true\" and \"True\" or use a string value" % (name, tr["target_node"], v.get("variable")))
+        for c in n.get("tools", []):
+            if "call" not in str(c.get("function", {}).get("description", "")).lower():
+                warn.append("%s: tool %s has no \"CALL it when ...\" trigger in its description; the model may talk about the action instead of taking it" % (name, c.get("function", {}).get("name")))
 
 
 if __name__ == "__main__":
