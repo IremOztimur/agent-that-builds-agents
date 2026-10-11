@@ -16,4 +16,12 @@ clean = [{"name": "r2", "only": None, "failed": [], "total": 5, "pub": 4}]
 assert stoprule.verdict(clean, ALL).startswith("STOP")
 assert not stoprule.needs_measuring(clean, ALL, 4) and stoprule.needs_measuring(clean, ALL, 5)
 assert not stoprule.needs_measuring([], ALL, 1)
+# the whole sequence that deadlocked: clean round, hold-out round, repair published, measured once, then STOP again
+seq = [{"name": "r1", "only": None, "failed": ["a"], "total": 5, "pub": 1}, {"name": "r2", "only": None, "failed": [], "total": 5, "pub": 2},
+       {"name": "h1", "only": None, "failed": ["a", "b"], "total": 5, "pub": 2, "style": "holdout"}]
+assert stoprule.verdict(seq, ALL).startswith("STOP") and not stoprule.needs_measuring(seq, ALL, 2)       # unchanged workflow: no rerun
+assert stoprule.needs_measuring(seq, ALL, 3)                                                              # repaired: measure it
+seq.append({"name": "r3", "only": None, "failed": [], "total": 5, "pub": 3})
+assert stoprule.verdict(seq, ALL).startswith("STOP") and not stoprule.needs_measuring(seq, ALL, 3)
+assert stoprule.best(seq, ALL)["name"] == "r3"                                                            # the latest on a tie ships
 print("ok: style rounds")

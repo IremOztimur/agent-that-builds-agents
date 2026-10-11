@@ -1,6 +1,6 @@
 """Run the practice customers and see what happened, never what was expected.
 
-    python3 tools/practice.py run <agent_id> --brief A|B|AB [--only ID,ID] [--style S] --name r1
+    python3 tools/practice.py run <agent_id> --brief A|B|AB [--only ID,ID] [--style S | --holdout] --name r1
     python3 tools/practice.py show r1 [ID ...]
     python3 tools/practice.py chat                        three live customer turns against the published workflow
 
@@ -18,7 +18,7 @@ sys.path.insert(0, str(WORK))
 sys.path.insert(0, str(SEALED)); sys.path.insert(0, str(SEALED / "tools"))
 import freya, run_cases, score
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import oracle, stoprule
+import oracle, stoprule, styles as talking
 
 MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 
@@ -57,7 +57,7 @@ def summary(d):
     for r in d["rows"]:
         f = fin.get(r["id"], {})
         reps = " %d/%d" % (f["passes"], f["runs"]) if d.get("runs", 1) > 1 else ""
-        print("%s %s%s | %s" % ("PASS" if (f.get("pass", r["pass"])) else "FAIL", r["id"], reps, " > ".join(r.get("tools", []))))
+        print("%s %s%s [%s] | %s" % ("PASS" if (f.get("pass", r["pass"])) else "FAIL", r["id"], reps, r.get("style") or "plain", " > ".join(r.get("tools", []))))
         if not r["pass"]:
             for cat, got in parts(r["failed"]):
                 print("      wrong:", cat + (" (agent recorded: %s)" % got if got else ""))
@@ -84,7 +84,7 @@ def judge_progress(name, d, only, scope, style=None):
     log = rounds() + [{"name": name, "only": only, "failed": [r["id"] for r in d["rows"] if not r["pass"]], "total": d["total"], "pub": current_pub(), "style": style}]
     json.dump(log, open(LEDGER, "w"))
     if style:
-        print("STYLE RUN (%s): not counted in the rounds; repair only what shows a rule about calls." % style)
+        print("%s: not counted in the rounds; repair only what shows a rule about calls." % ("HOLD-OUT RUN (the same customers, other styles)" if style == "holdout" else "STYLE RUN (%s)" % style))
         return None
     v = stoprule.verdict(log, scope)
     n = len(stoprule.full_rounds(log, scope))
@@ -96,12 +96,12 @@ def judge_progress(name, d, only, scope, style=None):
     return v
 
 
-def personas_for(cases, style):
-    """Persona ids are reused (the store lives in the sealed folder) so the workspace does not fill up."""
+def personas_for(cases, styles):
+    """Persona ids are reused (the store lives in the sealed folder) so the workspace does not fill up. `styles` maps a customer id to how it talks."""
     import hashlib
     store = SEALED / ".personas.json"
     ids = json.load(open(store)) if store.exists() else {}
-    spec = {c["id"]: run_cases.persona_for(c, {"identity": c["identity"]}, style) for c in cases}
+    spec = {c["id"]: run_cases.persona_for(c, {"identity": c["identity"]}, styles.get(c["id"])) for c in cases}
     key = {i: i + ":" + hashlib.sha1(json.dumps(p, sort_keys=True).encode()).hexdigest()[:10] for i, p in spec.items()}
     new = [c for c in cases if key[c["id"]] not in ids]
     if new:
@@ -217,19 +217,24 @@ def run(argv):
     agent, rest = argv[0], argv[1:]
     opt = {rest[i]: rest[i + 1] for i in range(len(rest) - 1) if rest[i].startswith("--")}
     name, style = opt.get("--name", "run"), opt.get("--style")
-    cases = [c for c in json.load(open(SEALED / "public-test-set.json"))
-             if (opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
+    in_brief = [c for c in json.load(open(SEALED / "public-test-set.json")) if opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]]
+    holdout = "--holdout" in argv
+    if style:                                  # one style for everyone, to look at a single way of talking: not a round
+        talk, label = {c["id"]: style for c in in_brief}, style
+    else:                                      # the fixed mix is the round; the shifted mix is the hold-out
+        talk, label = talking.assign([c["id"] for c in in_brief], 1 if holdout else 0), "holdout" if holdout else None
+    cases = [c for c in in_brief if not opt.get("--only") or c["id"] in opt["--only"].split(",")]
     scope = [c["id"] for c in cases]
     scored, derived = scored_cases(cases)
     cases = [scored[i] for i in scope]
     rules = json.load(open(WORK / "rules.json"))["rules"]
     only = opt["--only"].split(",") if opt.get("--only") else None
-    if not style and (only is None or set(only) >= set(scope)):
+    if not label and (only is None or set(only) >= set(scope)):
         stop = None if stoprule.needs_measuring(rounds(), scope, current_pub()) else stoprule.verdict(rounds(), scope)
         if stop:
             event("repair", "refused to start another full round: " + stop)
             sys.exit("No further full round: " + stop)
-    ids = personas_for(cases, style)
+    ids = personas_for(cases, talk)
     sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
     t0 = time.time()
     sim_id = start(agent, {ids[c["id"]]: sessions[c["id"]] for c in cases})
@@ -249,7 +254,7 @@ def run(argv):
         missed = [] if wrong_record else oracle.wording_misses(derived[c["id"]], rules, " ".join(said))   # wording said after a record that never happened is a symptom
         if missed:
             res["failed"].append("conversation: [wording] rules " + ", ".join(missed))
-        rows.append({"id": c["id"], "level": c["level"], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),
+        rows.append({"id": c["id"], "level": c["level"], "style": talk[c["id"]], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),
                      "tools": [x["tool"] for x in led["calls"]], "customer_id": sessions[c["id"]]["customer_id"]})
     if stoprule.is_dead(said_counts):
         event("platform", "DEAD ROUND: in all %d calls the agent said nothing after its opening line, so the model service is not answering; the round is not recorded" % len(said_counts))
@@ -260,7 +265,7 @@ def run(argv):
     json.dump({"simulation_id": sim_id, "seconds": round(time.time() - t0), "passed": n, "total": len(rows), "runs": 1, "rows": rows}, open(out, "w"), indent=1)
     summary(json.load(open(out)))
     print("run took %d s" % (time.time() - t0))
-    judge_progress(name, json.load(open(out)), only, scope, style)
+    judge_progress(name, json.load(open(out)), only, scope, label)
 
 
 def chat(argv):
