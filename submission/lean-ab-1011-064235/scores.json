@@ -1,0 +1,45 @@
+{
+ "v1": {
+  "round": "r1",
+  "passed": 8,
+  "total": 13,
+  "failed": [
+   "PUB-07",
+   "PUB-08",
+   "PUB-09",
+   "PUB-10",
+   "PUB-13"
+  ]
+ },
+ "v2": {
+  "round": "r2",
+  "passed": 9,
+  "total": 13,
+  "failed": [
+   "PUB-07",
+   "PUB-10",
+   "PUB-12",
+   "PUB-13"
+  ]
+ },
+ "v3": {
+  "round": "r3",
+  "passed": 10,
+  "total": 13,
+  "failed": [
+   "PUB-01",
+   "PUB-04",
+   "PUB-13"
+  ]
+ },
+ "v4": {
+  "round": "r4",
+  "passed": 11,
+  "total": 13,
+  "failed": [
+   "PUB-04",
+   "PUB-06"
+  ],
+  "best": true
+ }
+}
