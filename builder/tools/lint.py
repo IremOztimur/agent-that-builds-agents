@@ -1,6 +1,6 @@
 """Structural lint for a Freya workflow file. Brief-independent.
 
-    python3 tools/lint.py workflow.json [tools.json]
+    python3 tools/lint.py workflow.json [tool API file]     (default: the one in inputs.json)
 
 Exit 1 when something is wrong. Warnings (size) do not fail. Catches what the platform would silently drop or what
 deadlocks a call: `tools` on a non-conversation node, `pre_actions` on a conversation node, passthrough nodes without a
@@ -49,7 +49,14 @@ def lint(wf, base_url=None):
             bad.append("%s: tools on a %s node are silently dropped" % (name, t))
         if n.get("pre_actions") and t == "conversation":
             bad.append("%s: pre_actions on a conversation node are silently dropped" % name)
+        if t == "conversation" and not n.get("max_turn_transition"):
+            warn.append("%s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
+        for es in n.get("extraction_schema", []):
+            if "min_confidence" not in es:
+                bad.append("%s: extraction variable %s has no min_confidence (the default 0.95 silently discards values)" % (name, es.get("name")))
         for tr in n.get("transitions", []):
+            if tr.get("condition", {}).get("logic") == "and":
+                bad.append("%s: a top-level condition group must use logic 'or'; nest an 'and' group inside it" % name)
             if tr["target_node"] not in nodes and tr["target_node"] != "__previous__":
                 bad.append("%s: transition to unknown node %s" % (name, tr["target_node"]))
         if n.get("max_turn_transition") and n["max_turn_transition"] not in nodes:
@@ -97,8 +104,13 @@ def lint(wf, base_url=None):
 if __name__ == "__main__":
     wf = json.load(open(sys.argv[1]))
     base = None
-    if len(sys.argv) > 2:
-        base = json.load(open(sys.argv[2]))["servers"][0]["url"].rstrip("/")
+    try:
+        sys.path.insert(0, __import__("os").path.dirname(__file__))
+        import inputs
+        api = sys.argv[2] if len(sys.argv) > 2 else str(inputs.tools_path())
+        base = json.load(open(api))["servers"][0]["url"].rstrip("/")
+    except Exception:
+        pass
     bad, warn, lines = lint(wf, base)
     for w in warn:
         print("WARN", w)

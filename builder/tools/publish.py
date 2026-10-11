@@ -9,10 +9,10 @@ import json, os, pathlib, sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(HERE.parent))
-import freya, lint
+import freya, lint, inputs
 
 wf = json.load(open(sys.argv[1]))
-base = json.load(open(HERE.parent / "tools.json"))["servers"][0]["url"].rstrip("/") if (HERE.parent / "tools.json").exists() else None
+base = json.load(open(inputs.tools_path()))["servers"][0]["url"].rstrip("/")
 bad, warn, lines = lint.lint(wf, base)
 for w in warn:
     print("WARN", w)

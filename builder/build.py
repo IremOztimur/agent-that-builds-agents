@@ -13,19 +13,47 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 BUILDER = ROOT / "builder"
 KIT = ROOT / "build-the-builder_pack"
 SKILLS = ["read-brief", "compose-workflow", "test-and-repair"]
-EVIDENCE = ["rules.json", "design.md", "repairs.md", "report.md", "scores.json"]
+EVIDENCE = ["inputs.json", "rules.json", "design.md", "repairs.md", "report.md", "scores.json"]
 
-PROMPT = """Build a phone agent for the bank brief in brief.md, using the tool API in tools.json.
+PROMPT = """Build a phone agent for the bank brief in {brief_file} ({brief_lines} lines), using the tool API in {tools_file}.
+Both names are also in inputs.json. The brief may be a specification, a mail, a memo, notes or a transcript; read all of it.
 Use the skills in this order: read-brief, compose-workflow, test-and-repair. Work only with the files in this folder.
 The practice customers for this brief are run with tools/practice.py (brief {cases}); they show what happened, not what was expected. The final workflow must be in
 workflow.json and published with tools/publish.py. You have {minutes} minutes in total (tools/clock.py shows what is left);
 do not start a step you cannot finish. Finish with one line: the workflow_id, the agent_id, and how many customers passed."""
 
 
+def read_text(path):
+    """The brief as text, whatever it is called. A mail, memo, notes or specification; .docx is unpacked. Fails loudly."""
+    p = pathlib.Path(path)
+    if not p.is_file():
+        sys.exit("brief not found: %s" % path)
+    data = p.read_bytes()
+    if p.suffix.lower() == ".docx":
+        import re, zipfile
+        xml = zipfile.ZipFile(p).read("word/document.xml").decode("utf-8", "ignore")
+        text = re.sub(r"<[^>]+>", "", re.sub(r"</w:p>", "\n", xml))
+    else:
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            sys.exit("the brief %s is not UTF-8 text; convert it to text first (a PDF cannot be read as it is)" % path)
+    if not text.strip():
+        sys.exit("the brief %s is empty" % path)
+    return text
+
+
 def prepare(brief, api, slot, cases):
     work = pathlib.Path(tempfile.mkdtemp(prefix="builder-"))
-    shutil.copy(brief, work / "brief.md")
-    shutil.copy(api, work / "tools.json")
+    text = read_text(brief)
+    spec = json.load(open(api))                       # the tool API file, any name; must be an OpenAPI JSON document
+    if not spec.get("servers") or not spec.get("paths"):
+        sys.exit("the tool API file %s has no servers or paths" % api)
+    (work / "input").mkdir()
+    bname = pathlib.Path(brief).name + (".txt" if pathlib.Path(brief).suffix.lower() == ".docx" else "")
+    (work / "input" / bname).write_text(text)
+    shutil.copy(api, work / "input" / pathlib.Path(api).name)
+    (work / "inputs.json").write_text(json.dumps({"brief": "input/" + bname, "tools": "input/" + pathlib.Path(api).name, "brief_lines": len(text.splitlines())}))
     (work / "docs").mkdir()
     for d in ("workflow-format.md", "tools-and-code.md", "api.md"):
         shutil.copy(KIT / "docs" / d, work / "docs" / d)
@@ -48,6 +76,11 @@ def prepare(brief, api, slot, cases):
     for s in SKILLS:
         shutil.copytree(BUILDER / "skills" / s, work / ".claude" / "skills" / s)
     return work
+
+
+def names(work):
+    m = json.load(open(work / "inputs.json"))
+    return {"brief_file": m["brief"], "tools_file": m["tools"], "brief_lines": m["brief_lines"]}
 
 
 def sealed_dir(work):
@@ -75,7 +108,7 @@ async def run_agent(work, slot, minutes, cases, trace):
     trace.line("model", "builder model %s" % model)
 
     async def go():
-        async for m in query(prompt=PROMPT.format(minutes=minutes, cases=cases), options=options):
+        async for m in query(prompt=PROMPT.format(minutes=minutes, cases=cases, **names(work)), options=options):
             if isinstance(m, AssistantMessage):
                 uses = [b for b in m.content if isinstance(b, ToolUseBlock)]
                 texts = [b.text for b in m.content if isinstance(b, TextBlock)]
@@ -101,7 +134,7 @@ def finalize(work, slot, trace):
         trace.line("FAILED", "the builder produced no workflow.json")
         return None
     wf = json.load(open(wf_path))
-    base = json.load(open(work / "tools.json"))["servers"][0]["url"].rstrip("/")
+    base = json.load(open(work / json.load(open(work / "inputs.json"))["tools"]))["servers"][0]["url"].rstrip("/")
     bad, warn, lines = lint.lint(wf, base)
     trace.line("lint", "%d lines, %d nodes, %s" % (lines, len(wf["nodes"]), "clean" if not bad else "FAILED: " + "; ".join(bad)[:300]))
     if bad:
