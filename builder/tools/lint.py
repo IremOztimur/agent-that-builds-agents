@@ -28,7 +28,8 @@ def code_strings(node):
                 yield "%s.%s" % (f.get("name"), h), c[h]
 
 
-MAX_TURNS = 15       # most user turns one conversation node may spend
+MAX_TURNS = 30       # most user turns one conversation node may spend. The docs: a node that handles a whole call can need dozens; a loop must still end
+WARN_TURNS = 20
 
 
 def lint(wf, base_url=None):
@@ -55,7 +56,9 @@ def lint(wf, base_url=None):
         if t == "conversation" and not n.get("max_turn_transition"):
             bad.append("%s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
         if t == "conversation" and int(n.get("max_node_turns", 10)) > MAX_TURNS:
-            bad.append("%s: max_node_turns is %s; at most %d, so a stuck loop ends in a few turns" % (name, n.get("max_node_turns"), MAX_TURNS))
+            bad.append("%s: max_node_turns is %s; at most %d, so a stuck loop still ends" % (name, n.get("max_node_turns"), MAX_TURNS))
+        elif t == "conversation" and int(n.get("max_node_turns", 10)) > WARN_TURNS:
+            warn.append("%s: max_node_turns is %s; size it from the longest real conversation in this step (above %d a loop runs long)" % (name, n.get("max_node_turns"), WARN_TURNS))
         for es in n.get("extraction_schema", []):
             if "min_confidence" not in es:
                 bad.append("%s: extraction variable %s has no min_confidence (the default 0.95 silently discards values)" % (name, es.get("name")))
@@ -132,7 +135,7 @@ def reference_rules(wf, nodes, bad, warn):
                 bad.append("%s: a node that runs on entry must make its call. Blanking the url in a pre_actions hook makes the platform log a failed api_call on every pass; "
                            "skip the node with a transition on a variable instead (tools-and-code.md, \"Use pre_actions when the call must always run\")" % name)
         if n.get("passthrough") and chain_length(nodes, name) >= 3 and not any(m.get("passthrough") and name in [x["target_node"] for x in m.get("transitions", [])] for m in nodes.values()):
-            bad.append("%s starts a chain of %d passthrough nodes. Optional actions belong in one conversation node with several tools, not in a chain of passthrough nodes (tools-and-code.md)" % (name, chain_length(nodes, name)))
+            warn.append("%s starts a chain of %d passthrough nodes. If any of them is an optional action, it belongs in one conversation node with several tools, not in a chain (tools-and-code.md)" % (name, chain_length(nodes, name)))
         if "loop_prompt" in n:
             bad.append("%s: loop_prompt is rejected by the platform (\"Unrecognized key\") although the docs list it. Put what must change after the first turn into task_message" % name)
         if n.get("extraction_prompt") or any(e.get("extraction_prompt") and "{{extractor.speech}}" not in e["extraction_prompt"] for e in n.get("extraction_schema", [])):

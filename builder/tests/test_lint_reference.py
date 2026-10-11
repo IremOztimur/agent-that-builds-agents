@@ -45,8 +45,9 @@ assert not has(bad, "must make its call"), bad
 
 # no long chain of passthrough nodes
 chain = {"a": pas("b"), "b": pas("c"), "c": pas("bye")}
-assert has(problems(wf(chain))[0], "chain of 3"), problems(wf(chain))[0]
-assert not has(problems(wf({"a": pas("b"), "b": pas("bye")}))[0], "chain of")
+assert has(problems(wf(chain))[1], "chain of 3"), problems(wf(chain))[1]          # a warning: a sequence of needed calls is legitimate
+assert not has(problems(wf(chain))[0], "chain of")
+assert not has(problems(wf({"a": pas("b"), "b": pas("bye")}))[1], "chain of")
 
 # platform facts from the docs
 assert has(problems(wf({"a": {**conv, "loop_prompt": "x"}}))[0], "loop_prompt")
