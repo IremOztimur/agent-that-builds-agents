@@ -6,7 +6,7 @@ Freya, tests it against simulated customers and repairs it. No manual step.
     python3 builder/build.py <case folder> <mock url> 2>&1 | tee traces/final.log             the final: a folder of the bank's documents and your mock
     python3 builder/build.py <brief file> <tool API file> [--slot NAME] [--cases A|B|AB] [--minutes 30] [--fresh] [--dev]   development, on the practice briefs
 
-Needs `FREYA_API_KEY` and `FREYA_BANK_TEAM_KEY` (copy `builder/kit/env.template` to `env.sh`, fill it in, `source env.sh`), `pip install claude-agent-sdk`,
+Needs `FREYA_API_KEY` and `FREYA_BANK_TEAM_KEY` (copy `builder/kit/env.template` to `env.sh`, fill it in, `source env.sh`), `pip install -r requirements.txt`,
 and a Claude login or `ANTHROPIC_API_KEY`. `--dev` scores the practice customers against the kit's public expected values (development only);
 without it the builder's own expectations, derived from the brief, decide.
 

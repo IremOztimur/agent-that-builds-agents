@@ -267,7 +267,7 @@ def run(argv):
     if FINAL:
         for c in cases:
             mock("/_reset/" + str(c["ledger_id"]), {})
-        sessions = {c["id"]: {**c["variables"], "customer_id": c["ledger_id"]} for c in cases}
+        sessions = {c["id"]: dict(c["variables"]) for c in cases}
     else:
         sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
     t0 = time.time()
@@ -311,7 +311,7 @@ def chat(argv):
     """A live conversation with the published workflow: three customer turns on a practice customer. Shows every reply and how long it took,
     and fails when a reply is missing, slow or an error. Run it after publishing, before anything else: it finds a broken opening in seconds."""
     case = all_cases()[0]
-    variables = {**case["variables"], "customer_id": case["ledger_id"]} if FINAL else score.http("/v1/practice/sessions", {"case": case["id"]})["variables"]
+    variables = dict(case["variables"]) if FINAL else score.http("/v1/practice/sessions", {"case": case["id"]})["variables"]
     if FINAL:
         mock("/_reset/" + str(case["ledger_id"]), {})
     state = json.load(open(os.environ["BUILDER_SLOT_STATE"]))[os.environ["BUILDER_SLOT"]]

@@ -41,8 +41,9 @@ export default {
     const handler = handlers[url.pathname];
     if (!handler) return json({ ok: false, error: "unknown route " + url.pathname }, 404);
     const body = request.method === "POST" ? await request.json().catch(() => ({})) : Object.fromEntries(url.searchParams);
-    const id = body.customer_id || request.headers.get("x-customer-id");
-    if (!id) return json({ ok: false, error: "customer_id is required" }, 400);
+    // the customer's id: the field the contract uses for it (add its name here), or a header
+    const id = ["customerNumber", "customer_number", "customer_id", "customerId"].map((k) => body[k]).find((v) => v) || request.headers.get("x-customer-id");
+    if (!id) return json({ ok: false, error: "customer id is required" }, 400);
     const ledger = await ask(env, id, "/get");
     // handler({body, customer, ledger}) -> {status?, result, state?}: result goes back to the agent, state is merged into the ledger's state
     const out = await handler({ body, customer: customers[id] || null, ledger, env });

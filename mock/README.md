@@ -14,6 +14,6 @@ Run the builder with that URL: `python3 builder/build.py <case folder> <mock url
 What the builder's test runner needs from the mock (already in `worker.js`):
 - `GET /_ledger/<id>` returns `{"calls": [{"tool", "args", "result"}], "state": {...}}`: every call the agent made for that customer, and the facts the handlers kept.
 - `POST /_reset/<id>` clears one customer between rounds.
-- The id is the call's `customer_id` (body field or `x-customer-id` header). If the contract identifies customers differently, change the two lines that read it.
+- The id is the call's customer number (`customerNumber`, `customer_number`, `customer_id` or `customerId` in the body, or an `x-customer-id` header). If the contract names it differently, add the name to the list in `worker.js`.
 
 Keep the mock up until the results are out: the hidden customers' tool calls reach it.
