@@ -73,7 +73,8 @@ def all_ids():
 
 def judge_progress(name, d, only, scope):
     """Records the run, applies the stop rule and says so (also in the builder's trace)."""
-    log = rounds() + [{"name": name, "only": only, "failed": [r["id"] for r in d["rows"] if not r["pass"]], "total": d["total"]}]
+    pubs = json.load(open(WORK / "published.json")) if (WORK / "published.json").exists() else []
+    log = rounds() + [{"name": name, "only": only, "failed": [r["id"] for r in d["rows"] if not r["pass"]], "total": d["total"], "pub": pubs[-1]["seq"] if pubs else None}]
     json.dump(log, open(LEDGER, "w"))
     v = stoprule.verdict(log, scope)
     n = len(stoprule.full_rounds(log, scope))

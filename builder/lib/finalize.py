@@ -7,6 +7,26 @@ from .workdir import sealed_dir
 EVIDENCE = ["inputs.json", "rules.json", "design.json", "repairs.md", "report.md", "scores.json"]
 
 
+def best_measured(work, trace):
+    """The published version whose full round passed most customers (latest on a tie), if any round was measured."""
+    sys.path.insert(0, str(BUILDER / "tools"))
+    import stoprule
+    ledger, pubs = sealed_dir(work) / "rounds.json", work / "published.json"
+    if not ledger.exists() or not pubs.exists():
+        trace.line("best", "no full practice round was recorded; publishing workflow.json as it is")
+        return None
+    ids = [c["id"] for c in json.load(open(sealed_dir(work) / "public-test-set.json"))]
+    top = stoprule.best(json.load(open(ledger)), ids)
+    if top is None:
+        return None
+    files = {p["seq"]: p["file"] for p in json.load(open(pubs))}
+    chosen = json.load(open(work / files[top["pub"]]))
+    same = chosen == json.load(open(work / "workflow.json"))
+    trace.line("best", "best measured version is publish #%d (%s: %d of %d pass); %s" % (
+        top["pub"], top["name"], top["total"] - len(top["failed"]), top["total"], "it is the one in workflow.json" if same else "it replaces the later, less measured workflow.json"))
+    return chosen
+
+
 def finalize(work, slot, trace):
     sys.path.insert(0, str(KIT)); sys.path.insert(0, str(BUILDER / "tools"))
     import freya, lint
@@ -14,6 +34,9 @@ def finalize(work, slot, trace):
         trace.line("FAILED", "no workflow.json was produced")
         return None
     wf = json.load(open(work / "workflow.json"))
+    chosen = best_measured(work, trace)
+    if chosen is not None:
+        wf = chosen
     base = json.load(open(work / json.load(open(work / "inputs.json"))["tools"]))["servers"][0]["url"].rstrip("/")
     bad, _, lines = lint.lint(wf, base)
     trace.line("lint", "%d lines, %d nodes, %s" % (lines, len(wf["nodes"]), "clean" if not bad else "FAILED: " + "; ".join(bad)[:300]))

@@ -2,7 +2,7 @@
 import pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "tools"))
-from stoprule import verdict
+from stoprule import best, verdict
 
 IDS = ["c%02d" % i for i in range(13)]
 
@@ -19,8 +19,14 @@ assert stop([run(["c01"]), run(["c01"])]), "strong and unchanged: stop"
 assert not stop([run(["c01", "c02"]), run(["c01"])]), "improving: continue"
 assert stop([run(["c01"]), run([], ["c01"])]), "a failure that passes alone is noise: nothing left"
 w = ["c01", "c02", "c03", "c04", "c05", "c06"]
-assert not stop([run(w), run(w)]), "weak and unchanged once: one more try"
+assert not stop([run(w), run(w)]), "weak and not improving once: one more try"
 assert stop([run(w), run(w), run(w)]), "weak and unchanged twice: stop"
 assert not stop([run(w), run(w[:5]), run(w[:3])]) and stop([run(w), run(w[:5]), run(w[:3]), run(w[:2])]), "improving ends at four rounds"
-assert not stop([run(["c01", "c02", "c03"]), run(["c01"]), run(["c05"])]), "a different single failure is not 'the same'"
+assert stop([run(["c01", "c02", "c03"]), run(["c01"]), run(["c05"])]), "failures moved but did not go down: stop"
+assert stop([run(["c11", "c12"]), run(["c10", "c12"])]), "the real run: 2 failures, then 2 again, one of them the same"
+assert "c12" in verdict([run(["c11", "c12"]), run(["c10", "c12"])], IDS)
+r = lambda failed, pub: {"name": "x", "only": None, "failed": failed, "total": 13, "pub": pub}
+assert best([r(w, 1), r(["c01", "c02"], 2), r(["c03", "c04"], 3)], IDS)["pub"] == 3, "ties go to the latest"
+assert best([r(["c01", "c02"], 2), r(w, 3)], IDS)["pub"] == 2, "an unmeasured or worse later version is not chosen"
+assert best([], IDS) is None
 print("ok: stop rule")
