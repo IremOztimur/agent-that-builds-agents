@@ -16,6 +16,8 @@ WORK = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WORK))
 sys.path.insert(0, str(SEALED)); sys.path.insert(0, str(SEALED / "tools"))
 import freya, run_cases, score
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import stoprule
 
 MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 
@@ -56,6 +58,31 @@ def summary(d):
         if not r["pass"]:
             for cat, got in parts(r["failed"]):
                 print("      wrong:", cat + (" (agent recorded: %s)" % got if got else ""))
+
+
+LEDGER = SEALED / "rounds.json"
+
+
+def rounds():
+    return json.load(open(LEDGER)) if LEDGER.exists() else []
+
+
+def all_ids():
+    return [c["id"] for c in json.load(open(SEALED / "public-test-set.json"))]
+
+
+def judge_progress(name, d, only, scope):
+    """Records the run, applies the stop rule and says so (also in the builder's trace)."""
+    log = rounds() + [{"name": name, "only": only, "failed": [r["id"] for r in d["rows"] if not r["pass"]], "total": d["total"]}]
+    json.dump(log, open(LEDGER, "w"))
+    v = stoprule.verdict(log, scope)
+    n = len(stoprule.full_rounds(log, scope))
+    if v:
+        print(v)
+        event("repair", v)
+    else:
+        print("NEXT: repair the causes (not single customers), then run everything again. Full rounds so far: %d." % n)
+    return v
 
 
 def personas_for(cases, style):
@@ -156,6 +183,13 @@ def run(argv):
     name, style = opt.get("--name", "run"), opt.get("--style")
     cases = [c for c in json.load(open(SEALED / "public-test-set.json"))
              if (opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
+    scope = [c["id"] for c in cases]
+    only = opt["--only"].split(",") if opt.get("--only") else None
+    if only is None or set(only) >= set(scope):
+        stop = stoprule.verdict(rounds(), scope)
+        if stop:
+            event("repair", "refused to start another full round: " + stop)
+            sys.exit("No further full round: " + stop)
     ids = personas_for(cases, style)
     sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
     t0 = time.time()
@@ -177,6 +211,7 @@ def run(argv):
     json.dump({"simulation_id": sim_id, "seconds": round(time.time() - t0), "passed": n, "total": len(rows), "runs": 1, "rows": rows}, open(out, "w"), indent=1)
     summary(json.load(open(out)))
     print("run took %d s" % (time.time() - t0))
+    judge_progress(name, json.load(open(out)), only, scope)
 
 
 def show(argv):
