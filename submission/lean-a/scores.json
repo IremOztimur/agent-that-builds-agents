@@ -1,7 +1,0 @@
-{"agent_id": "b80e092e-6d2b-4084-8be0-13dfbcf9fce2",
- "runs": [
-  {"name": "r1", "version": "versions/v1.json", "passed": 9, "total": 10, "failed": ["PUB-10"]},
-  {"name": "r2", "version": "versions/v2.json", "passed": 9, "total": 10, "failed": ["PUB-10"], "note": "ledger correct; judge-only failure"},
-  {"name": "r2b", "version": "versions/v2.json", "only": ["PUB-10"], "passed": 1, "total": 1, "failed": []}
- ],
- "best": "versions/v2.json"}

@@ -55,7 +55,10 @@ def _seal(work):
     shutil.copy(KIT / "freya.py", sealed / "freya.py")
     shutil.copy(KIT / "public-test-set.json", sealed / "public-test-set.json")
     personas = BUILDER / ".personas.json"           # persona ids are reused so the workspace does not fill up
-    shutil.copy(personas if personas.exists() else KIT / ".personas.json", sealed / ".personas.json")
+    if personas.exists():
+        shutil.copy(personas, sealed / ".personas.json")
+    else:
+        (sealed / ".personas.json").write_text("{}")
     return sealed
 
 

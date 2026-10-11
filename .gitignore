@@ -2,15 +2,22 @@
 __pycache__/
 *.pyc
 .venv/
+
+# keys: never committed
 env.sh
 env.example
-build-the-builder_pack/env.sh
-build-the-builder_pack/env.example
-build-the-builder_pack/.venv/
-build-the-builder_pack/traces/
-build-the-builder_pack/scratch/
+
+# the original hackathon kit and hackathon material stay local; the builder uses the vendored copy in builder/kit
+build-the-builder_pack/
+recording_brief.md
 background_reading.pdf
-eval/out/
+
+# local state of the builder and its dev scripts
 builder/.slots.json
-submission/*/results/
 builder/.personas.json
+builder/kit/.freya-agents.json
+dev/out/
+
+# runs: the evidence of one run is committed only for the final submission (git add -f submission/<name>.workflow.json traces/<name>.log)
+submission/
+traces/
