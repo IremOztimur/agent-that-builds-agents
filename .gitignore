@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+env.sh
+env.example
+build-the-builder_pack/env.sh
+build-the-builder_pack/env.example
+build-the-builder_pack/.venv/
+build-the-builder_pack/traces/
+build-the-builder_pack/scratch/
+background_reading.pdf
+eval/out/
