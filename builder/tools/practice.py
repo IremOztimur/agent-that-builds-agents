@@ -1,6 +1,5 @@
 """Run the practice customers and see what happened, never what was expected.
 
-    python3 tools/practice.py run <agent_id> --smoke --name s1                      the basic customers first (one per kind of call)
     python3 tools/practice.py run <agent_id> --brief A|B|AB [--only ID,ID] [--style S] --name r1
     python3 tools/practice.py show r1 [ID ...]
 
@@ -18,7 +17,7 @@ sys.path.insert(0, str(WORK))
 sys.path.insert(0, str(SEALED)); sys.path.insert(0, str(SEALED / "tools"))
 import freya, run_cases, score
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import oracle, staging, stoprule
+import oracle, stoprule
 
 MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 
@@ -79,22 +78,12 @@ def current_pub():
     return pubs[-1]["seq"] if pubs else None
 
 
-def smoke_passed():
-    """True when the latest smoke run was on the version published now and every customer in it passed."""
-    smokes = [r for r in rounds() if r.get("smoke")]
-    return bool(smokes) and smokes[-1]["pub"] == current_pub() and not smokes[-1]["failed"]
-
-
-def judge_progress(name, d, only, scope, smoke=False, style=None):
+def judge_progress(name, d, only, scope, style=None):
     """Records the run, applies the stop rule and says so (also in the builder's trace)."""
-    log = rounds() + [{"name": name, "only": only, "failed": [r["id"] for r in d["rows"] if not r["pass"]], "total": d["total"], "pub": current_pub(),
-                       "smoke": smoke, "style": style}]
+    log = rounds() + [{"name": name, "only": only, "failed": [r["id"] for r in d["rows"] if not r["pass"]], "total": d["total"], "pub": current_pub(), "style": style}]
     json.dump(log, open(LEDGER, "w"))
-    if smoke or style:
-        if smoke:
-            print("SMOKE RUN: " + ("all pass; run every customer next." if not log[-1]["failed"] else "repair these first; a full round starts only when they all pass."))
-        else:
-            print("STYLE RUN (%s): not counted in the rounds; repair only what shows a rule about calls." % style)
+    if style:
+        print("STYLE RUN (%s): not counted in the rounds; repair only what shows a rule about calls." % style)
         return None
     v = stoprule.verdict(log, scope)
     n = len(stoprule.full_rounds(log, scope))
@@ -229,17 +218,12 @@ def run(argv):
     name, style = opt.get("--name", "run"), opt.get("--style")
     cases = [c for c in json.load(open(SEALED / "public-test-set.json"))
              if (opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]) and (not opt.get("--only") or c["id"] in opt["--only"].split(","))]
-    smoke = "--smoke" in argv
-    if smoke:
-        cases = [c for c in cases if c["id"] in staging.smoke_ids(cases)]
     scope = [c["id"] for c in cases]
     scored, derived = scored_cases(cases)
     cases = [scored[i] for i in scope]
     rules = json.load(open(WORK / "rules.json"))["rules"]
     only = opt["--only"].split(",") if opt.get("--only") else None
-    if not smoke and not style and only is None and not smoke_passed():
-        sys.exit("Run the basic customers first: python3 tools/practice.py run <agent_id> --smoke --name sN. A full round starts only when every one of them passes on the version published now.")
-    if not smoke and not style and (only is None or set(only) >= set(scope)):
+    if not style and (only is None or set(only) >= set(scope)):
         stop = stoprule.verdict(rounds(), scope)
         if stop:
             event("repair", "refused to start another full round: " + stop)
@@ -269,7 +253,7 @@ def run(argv):
     json.dump({"simulation_id": sim_id, "seconds": round(time.time() - t0), "passed": n, "total": len(rows), "runs": 1, "rows": rows}, open(out, "w"), indent=1)
     summary(json.load(open(out)))
     print("run took %d s" % (time.time() - t0))
-    judge_progress(name, json.load(open(out)), only, scope, smoke, style)
+    judge_progress(name, json.load(open(out)), only, scope, style)
 
 
 def show(argv):

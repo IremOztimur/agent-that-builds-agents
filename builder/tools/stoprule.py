@@ -12,7 +12,7 @@ def full_rounds(rounds, all_ids):
     """Full rounds after noise reruns. `rounds` is a list of {"name", "only": ids or None, "failed": ids, "total": n, "pub": n}."""
     out = []
     for r in rounds:
-        if r.get("smoke") or r.get("style"):       # a smoke run or a run with another way of talking is not comparable with a full round
+        if r.get("style"):       # a run with another way of talking is not comparable with a full round
             continue
         only = set(r["only"]) if r.get("only") else None
         if only is None or only >= set(all_ids):
