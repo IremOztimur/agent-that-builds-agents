@@ -14,10 +14,11 @@ What the platform does with a workflow. Build to these while you design; `tools/
 | F8 | `response_mapping` paths start with `data.` | TC response_mapping |
 | F9 | Code reads and writes `vars`, has no `{{ }}`, and compiles. Booleans arrive as strings | TC code nodes |
 | F10 | Calls go only to the tool API host. Parameters bake `default`, never `const` | TC tools |
-| F11 | Every conversation node has `max_node_turns` (30 at most) and a `max_turn_transition`; without the target the cap does nothing | WF limits |
+| F11 | Every conversation node has `max_node_turns` (8 to 30) and a `max_turn_transition`; without the target the cap does nothing. A cap is a loop guard: a customer who rambles needs more turns than a clean one | WF limits |
 | F12 | No `loop_prompt`: the platform rejects it ("Unrecognized key") although the docs list it | seen in a dry run |
 | F13 | An `end_call` node has a `terminal`; the farewell is its `spoken_message` and `on_enter` is `silent`, otherwise the call hangs up silently | WF end-call nodes |
 | F14 | A node that runs on entry (`pre_actions`) always makes its call. A node that is sometimes not needed is skipped by a transition on a variable. Never blank the url there: the platform logs a failed `api_call` on every pass | TC pre_actions vs tools |
+| F15 | An extraction slot never counts what happened (values like `first_refusal`, `second_refusal`, or a description with "already"). The extractor re-reads the last messages every turn and takes rambling for a refusal. Count from the bank's answer, the engine's `_failure_count`, or a model-called report with a closed set of values | WF extraction; seen in a talkative run |
 | W1 | Optional actions (notes, transfer, callback) are tools of one conversation node, not a chain of passthrough nodes | TC pre_actions vs tools |
 | W2 | Dates are extracted with `type: "date"` (a string gets no date anchor) | WF extraction |
 | W3 | Test a boolean as both `"true"` and `"True"`, or use a string value | WF booleans |
@@ -25,5 +26,6 @@ What the platform does with a workflow. Build to these while you design; `tools/
 | W5 | `context_variables` is dropped on save; put the values in the prompt with `{{var}}` | WF context variables |
 | W6 | A `task_message` does not name nodes or routing; the model narrates steps that have not happened | WF prompts |
 | W7 | Size: about 600 lines, turn caps above 20 run long | WF limits |
+| W8 | A `max_turn_transition` does not lead straight to closing the call; first one more try or an escalation (transfer, callback) | WF limits |
 
 Also, from the docs: deterministic conditions go before `matches_intent`; fork on an extracted enum with `equals`; a node without tools says no tool call is allowed in this turn; keep dialogue in `task_message`, routing in `transitions`, data capture in `extraction_schema`.

@@ -57,4 +57,18 @@ ex = {**conv, "extraction_schema": [{"name": "x", "type": "string", "min_confide
 assert has(problems(wf({"a": ex}))[0], "{{extractor.speech}}")
 dt = {**conv, "extraction_schema": [{"name": "pay_date", "type": "string", "min_confidence": 0.7}]}
 assert has(problems(wf({"a": dt}))[1], "declare dates")
+# a slot that counts what happened is the talkative-customer trap
+ordinal = {**conv, "extraction_schema": [{"name": "stance", "type": "string", "min_confidence": 0.7, "enum_values": ["answering", "first_refusal", "second_refusal"]}]}
+assert has(problems(wf({"a": ordinal}))[0], "[F15]")
+counting = {**conv, "extraction_schema": [{"name": "stance", "type": "string", "min_confidence": 0.7, "description": "second_ if the customer had already refused once"}]}
+assert has(problems(wf({"a": counting}))[0], "[F15]")
+fine = {**conv, "extraction_schema": [{"name": "next_action", "type": "string", "min_confidence": 0.7, "enum_values": ["pay", "dispute", "unclear"], "description": "What the customer wants"}]}
+assert not has(problems(wf({"a": fine}))[0], "[F15]")
+# a cap that goes straight to closing the call is a warning; one that goes to a retry or an escalation step is not
+straight = {**conv, "max_turn_transition": "bye"}
+assert has(problems(wf({"a": straight}))[1], "[W8]")
+via_code = {"a": {**conv, "max_turn_transition": "settle"}, "settle": pas("bye", node_type="code")}
+assert has(problems(wf(via_code))[1], "[W8]")
+escalate = {"a": {**conv, "max_turn_transition": "help"}, "help": {**conv, "max_turn_transition": "a", "transitions": [{"target_node": "bye", "description": "d", "condition": {"operator": "always"}}]}}
+assert not has(problems(wf(escalate))[1], "[W8]")
 print("ok: lint reference")

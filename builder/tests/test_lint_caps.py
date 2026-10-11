@@ -20,4 +20,6 @@ assert any("no max_turn_transition" in p for p in problems(wf(max_node_turns=12)
 assert any("max_node_turns is 40" in p for p in problems(wf(max_node_turns=40, max_turn_transition="bye")))
 assert any("max_node_turns is 25" in p for p in lint.lint(wf(max_node_turns=25, max_turn_transition="bye"))[1])      # a warning, not a failure
 assert not any("max_node_turns" in p for p in problems(wf(max_node_turns=25, max_turn_transition="bye")))
+assert any("max_node_turns is 5; at least 8" in p for p in problems(wf(max_node_turns=5, max_turn_transition="bye")))   # a cap of 2 or 5 closes a step a talkative customer has barely started
+assert not any("at least 8" in p for p in problems(wf(max_node_turns=8, max_turn_transition="bye")))
 print("ok: lint turn caps")

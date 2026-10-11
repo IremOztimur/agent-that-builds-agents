@@ -30,6 +30,9 @@ def code_strings(node):
 
 MAX_TURNS = 30       # most user turns one conversation node may spend. The docs: a node that handles a whole call can need dozens; a loop must still end
 WARN_TURNS = 20
+MIN_TURNS = 8        # fewest user turns a node that talks to the customer may allow: a customer who rambles needs more turns than a clean one
+ORDINAL = re.compile(r"^(first|second|third|fourth|\d+(st|nd|rd|th))_|_(once|twice|again)$", re.I)
+COUNTING = re.compile(r"\b(already|so far|previously|had)\b.{0,60}\b(refus\w*|declin\w*|attempt\w*|wrong|asked|said no)\b|\b(refus\w*|declin\w*|attempt\w*|asked)\b.{0,60}\b(already|so far|previously|before)\b", re.I)
 
 
 def lint(wf, base_url=None):
@@ -55,11 +58,16 @@ def lint(wf, base_url=None):
             bad.append("[F2] %s: pre_actions on a conversation node are silently dropped" % name)
         if t == "conversation" and not n.get("max_turn_transition"):
             bad.append("[F11] %s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
+        if t == "conversation" and int(n.get("max_node_turns", 10)) < MIN_TURNS:
+            bad.append("[F11] %s: max_node_turns is %s; at least %d, because a customer who rambles needs more turns and the cap closes the step" % (name, n.get("max_node_turns"), MIN_TURNS))
         if t == "conversation" and int(n.get("max_node_turns", 10)) > MAX_TURNS:
             bad.append("[F11] %s: max_node_turns is %s; at most %d, so a stuck loop still ends" % (name, n.get("max_node_turns"), MAX_TURNS))
         elif t == "conversation" and int(n.get("max_node_turns", 10)) > WARN_TURNS:
             warn.append("[W7] %s: max_node_turns is %s; size it from the longest real conversation in this step (above %d a loop runs long)" % (name, n.get("max_node_turns"), WARN_TURNS))
         for es in n.get("extraction_schema", []):
+            if any(ORDINAL.search(str(v)) for v in es.get("enum_values", [])) or COUNTING.search(str(es.get("description", ""))):
+                bad.append("[F15] %s: extraction variable %s counts what happened (how often, already, first or second time). The extractor re-reads the last messages every turn and takes rambling for a refusal; "
+                           "count from the bank's answer, the engine's failure count, or a model-called report with a closed set of values" % (name, es.get("name")))
             if "min_confidence" not in es:
                 bad.append("[F6] %s: extraction variable %s has no min_confidence (the default 0.95 silently discards values)" % (name, es.get("name")))
         for tr in n.get("transitions", []):
@@ -124,6 +132,17 @@ def chain_length(nodes, start):
     return walk(start, set())
 
 
+def closes(nodes, k, seen=()):
+    """True when entering node k can only end the call: an end_call node, or passthrough nodes whose every exit closes."""
+    n = nodes.get(k, {})
+    if n.get("node_type") == "end_call":
+        return True
+    if not n.get("passthrough") or k in seen:
+        return False
+    nxt = [t["target_node"] for t in n.get("transitions", [])]
+    return bool(nxt) and all(closes(nodes, x, seen + (k,)) for x in nxt)
+
+
 def reference_rules(wf, nodes, bad, warn):
     """What docs/workflow-format.md and docs/tools-and-code.md say, as checks."""
     if wf.get("context_variables"):
@@ -136,6 +155,9 @@ def reference_rules(wf, nodes, bad, warn):
                            "skip the node with a transition on a variable instead (tools-and-code.md, \"Use pre_actions when the call must always run\")" % name)
         if n.get("passthrough") and chain_length(nodes, name) >= 3 and not any(m.get("passthrough") and name in [x["target_node"] for x in m.get("transitions", [])] for m in nodes.values()):
             warn.append("[W1] %s starts a chain of %d passthrough nodes. If any of them is an optional action, it belongs in one conversation node with several tools, not in a chain (tools-and-code.md)" % (name, chain_length(nodes, name)))
+        tgt = n.get("max_turn_transition")
+        if t == "conversation" and tgt and closes(nodes, tgt):
+            warn.append("[W8] %s: max_turn_transition %s goes straight to closing the call. A cap is a loop guard: give the step one more try or an escalation (transfer, callback) first" % (name, tgt))
         if "loop_prompt" in n:
             bad.append("[F12] %s: loop_prompt is rejected by the platform (\"Unrecognized key\") although the docs list it. Put what must change after the first turn into task_message" % name)
         if n.get("extraction_prompt") or any(e.get("extraction_prompt") and "{{extractor.speech}}" not in e["extraction_prompt"] for e in n.get("extraction_schema", [])):
