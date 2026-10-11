@@ -1,0 +1,15 @@
+{
+  "team": "memory leak",
+  "members": [
+    {
+      "name": "İrem Öztimur",
+      "email": "iremoztimur07@gmail.com"
+    }
+  ],
+  "repo": "https://github.com/IremOztimur/agent-that-builds-agents",
+  "commit": "98d831ae0a37537a7365c4d8c510f88fe7014761",
+  "run_command": "python3 builder/build.py {case_folder} {mock_url} --slot final",
+  "workflow": "submission/final.workflow.json",
+  "trace": "traces/final.log",
+  "mock_url": "https://bank-mock.bank-mock-dev.workers.dev"
+}
