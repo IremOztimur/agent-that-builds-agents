@@ -13,6 +13,11 @@ import inputs
 
 CLASSES = {"gate", "calc", "state", "speech", "flow", "outcome"}
 STATUS = {"decided", "proposed", "rejected", "example", "superseded", "unresolved"}
+LIVE = ("decided", "proposed", "unresolved")
+# how a rule is enforced: gate (order, a condition before an action), limit (a number, count or derived value),
+# allowed_set (what may or may not be offered or done), wording (exact words the brief mandates),
+# content (facts that must be conveyed), style (tone, manner)
+KINDS = {"gate", "limit", "allowed_set", "wording", "content", "style"}
 
 
 def norm(s):
@@ -56,6 +61,18 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
         q = norm(str(r.get("quote", "")))
         if q and q not in brief:
             bad.append("%s: quote is not a verbatim part of the brief: %r" % (rid, r["quote"][:80]))
+        if r.get("status") in LIVE:
+            if r.get("kind") not in KINDS:
+                bad.append("%s: kind %r not in %s" % (rid, r.get("kind"), sorted(KINDS)))
+            if not r.get("applies"):
+                bad.append("%s: applies is missing (the situation in which the rule is in force, e.g. \"after identity is verified\")" % rid)
+            if r.get("kind") == "wording" and norm(str(r.get("wording", ""))) not in brief:
+                bad.append("%s: a wording rule needs \"wording\", the exact words the brief mandates, verbatim from the brief" % rid)
+    ids = {r.get("id") for r in rules}
+    for r in rules:
+        for d in r.get("depends_on", []):
+            if d not in ids:
+                bad.append("%s: depends_on %r is not a rule id" % (r.get("id"), d))
     text = norm(" ".join(str(r.get("quote", "")) + " " + str(r.get("note", "")) for r in rules if r.get("status") != "rejected"))
     api = json.load(open(tools_p))
     for path, vals in enums(api):
@@ -76,7 +93,7 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
             uncovered.append("line %d: %s" % (i, line.strip()[:90]))
     for u in uncovered[:40]:
         warn.append("not covered by any rule (add a rule, or list the line under skipped_lines with a reason): " + u)
-    live = [r for r in rules if r.get("status") in ("decided", "proposed", "unresolved")]
+    live = [r for r in rules if r.get("status") in LIVE]
     print("rules: %d (%d live)" % (len(rules), len(live)))
     for w in warn[:60]:
         print("WARN", w)

@@ -18,6 +18,7 @@ def prepare(brief, api, cases):
     shutil.copy(api, work / "input" / pathlib.Path(api).name)
     (work / "inputs.json").write_text(json.dumps({"brief": "input/" + bname, "tools": "input/" + pathlib.Path(api).name,
                                                   "brief_lines": len(text.splitlines()), "cases": cases}))
+    (work / "topics.json").write_text(json.dumps(topics(cases), indent=1))
     (work / "docs").mkdir()
     for d in ("workflow-format.md", "tools-and-code.md", "api.md"):
         shutil.copy(KIT / "docs" / d, work / "docs" / d)
@@ -30,6 +31,17 @@ def prepare(brief, api, cases):
     (work / "versions").mkdir()
     (work / ".sealed").write_text(str(_seal(work)))
     return work
+
+
+def topics(cases):
+    """What each practice customer does, never what the bank must show afterwards: no `expected`, no `checks`, no identity answers.
+    The agent derives the expectations for each topic from the brief it is building for."""
+    keep = ("id", "family", "level", "title", "script", "products", "faults")
+    out = []
+    for c in json.loads((KIT / "public-test-set.json").read_text()):
+        if cases == "AB" or c["brief"] == cases:
+            out.append({**{k: c[k] for k in keep if k in c}, "now": c.get("variables", {}).get("now")})
+    return out
 
 
 def _seal(work):

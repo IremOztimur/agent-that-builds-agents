@@ -3,7 +3,7 @@ import json, subprocess, sys
 
 PHASES = [
     {"n": 0, "skill": "read-brief", "prompt": "Phase 0 of 3: use the read-brief skill.",
-     "reads": ["inputs.json"]},
+     "reads": ["inputs.json", "topics.json"]},
     {"n": 1, "skill": "compose-workflow", "prompt": "Phase 1 of 3: use the compose-workflow skill.",
      "reads": ["docs/workflow-format.md", "docs/tools-and-code.md", "examples/base-agent.json"]},
     {"n": 2, "skill": "test-and-repair", "prompt": "Phase 2 of 3: use the test-and-repair skill.",
@@ -22,6 +22,9 @@ def gate(n, work, seen):
         out = subprocess.run([sys.executable, "tools/check_rules.py"], cwd=work, capture_output=True, text=True).stdout
         if "check_rules: ok" not in out:
             bad.append("tools/check_rules.py does not pass:\n" + out[-800:])
+        out = subprocess.run([sys.executable, "tools/check_expectations.py"], cwd=work, capture_output=True, text=True).stdout
+        if "check_expectations: ok" not in out:
+            bad.append("tools/check_expectations.py does not pass:\n" + out[-800:])
     if n >= 1:
         if not (work / "workflow.json").exists():
             return bad + ["workflow.json does not exist"]
