@@ -64,7 +64,7 @@ def _args_match(want, got):
 
 
 def tool_name(url):
-    """The service a URL calls: its last path segment (`.../voice/v1/cards.list` -> `cards.list`)."""
+    """The service a URL calls: its last path segment (`.../api/v1/orders.get` -> `orders.get`)."""
     return str(url).split("?")[0].rstrip("/").split("/")[-1]
 
 

@@ -59,7 +59,7 @@ assert any(p.startswith("state outcome") and "plan" not in p.split("agent left")
 assert oracle.final_score(E, {"error": "the mock did not answer"})[0].startswith("ledger:")
 assert oracle.persona({"id": "T1", "title": "t", "script": "Ayşe Hanım, kartı için..."}, E, ("talkative", "HOW YOU TALK: x"))["prompt"].count("Ayşe Hanım") == 1
 # the service a call went to, and a big data file that stays out of the corpus
-assert oracle.tool_name("https://m.workers.dev/voice/v1/cards.list") == "cards.list" and oracle.tool_name("https://m/x/statement.week.change?a=1") == "statement.week.change"
+assert oracle.tool_name("https://m.workers.dev/api/v1/orders.get") == "orders.get" and oracle.tool_name("https://m/x/orders.update?a=1") == "orders.update"
 big = pathlib.Path(tempfile.mkdtemp()) / "c"; big.mkdir()
 (big / "BRIEF.md").write_text("kural\n")
 (big / "records.json").write_text(json.dumps({"customers": [{"n": i, "pad": "x" * 200} for i in range(400)]}, indent=1))
