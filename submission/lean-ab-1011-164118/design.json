@@ -1,0 +1,225 @@
+{
+ "rows": [
+  {
+   "rules": [
+    "A0-fiction",
+    "A0-density",
+    "A4-robot",
+    "A43-scam"
+   ],
+   "mechanism": "prompt",
+   "where": "system_prompt"
+  },
+  {
+   "rules": [
+    "A0-var-id"
+   ],
+   "mechanism": "structure",
+   "where": "tools verify_identity, get_account, create_promise, add_note, schedule_callback, transfer_to_agent, close_call: each body bakes customer_id from the call variable"
+  },
+  {
+   "rules": [
+    "A0-job",
+    "A0-vars",
+    "A16-account",
+    "A1-noleak",
+    "A44-unknown"
+   ],
+   "mechanism": "structure",
+   "where": "node load_account: get_account exists only there, reached only through the identity transition on verify_identity all_verified; account facts exist in no earlier node, and negotiate shows only figures computed in brain"
+  },
+  {
+   "rules": [
+    "A0-var-name",
+    "A0-var-title",
+    "A1-open",
+    "A2-ask"
+   ],
+   "mechanism": "structure",
+   "where": "node reach: fixed on_enter tts line; the brief wording is quoted in its task_message"
+  },
+  {
+   "rules": [
+    "A0-var-now",
+    "A-bizdays",
+    "A18-deadline",
+    "A18-early",
+    "A18-late",
+    "A25-floor",
+    "A30-att1",
+    "A30-att2",
+    "A30-amount",
+    "A0-scope",
+    "B1-products",
+    "B3-per-product",
+    "A17-product",
+    "A17-team",
+    "B2-state-all"
+   ],
+   "mechanism": "code",
+   "where": "node brain: plan branch computes names, deadline, band, floor and attempt offers per product from now, and writes the first step"
+  },
+  {
+   "rules": [
+    "A3-confirm",
+    "A8-wrong",
+    "A9-deceased"
+   ],
+   "mechanism": "structure",
+   "where": "node reach: extraction line_status enum and transitions on it; brain sets outcome and the fixed farewell"
+  },
+  {
+   "rules": [
+    "A3-twice",
+    "A3-question"
+   ],
+   "mechanism": "structure",
+   "where": "node reach: transition on line_status unclear with reach.total_turns above 1, max_node_turns as fallback"
+  },
+  {
+   "rules": [
+    "A5-silent",
+    "A10-relative"
+   ],
+   "mechanism": "structure",
+   "where": "node reach: no account data, no verify_identity tool"
+  },
+  {
+   "rules": [
+    "A6-window",
+    "A6-book",
+    "A7-outside"
+   ],
+   "mechanism": "code",
+   "where": "tool schedule_callback: pre hook blocks anything outside the window computed in brain; transitions on its success and failure counters"
+  },
+  {
+   "rules": [
+    "A11-order",
+    "A11-format",
+    "A11-dmy"
+   ],
+   "mechanism": "code",
+   "where": "tool verify_identity: pre hook blocks phone_last4 before the date of birth passed and rewrites a numbers-only date as day, month, year into YYYY-MM-DD"
+  },
+  {
+   "rules": [
+    "A12-three",
+    "A13-swap",
+    "A14-failed"
+   ],
+   "mechanism": "code",
+   "where": "tool verify_identity: post hook turns the bank's answer into the next step; identity transition on wrong_answers_left 0; brain farewell names app or branch"
+  },
+  {
+   "rules": [
+    "A15-explain",
+    "A15-whatabout",
+    "A45-notalk",
+    "A42-human"
+   ],
+   "mechanism": "code",
+   "where": "node brain: decline_count, human_count and notalk counters fed by the id_intent and reply enums; allowed_queue opens the transfer"
+  },
+  {
+   "rules": [
+    "A19-valid",
+    "A20-holiday",
+    "A21-vague",
+    "A22-weekday",
+    "A23-after",
+    "A24-full",
+    "A26-floor-once",
+    "A26-attempt2",
+    "A27-accept",
+    "A27-below",
+    "A29-notrefusal",
+    "A30-flat",
+    "A31-stop",
+    "A33-noterms",
+    "B4-all-today",
+    "B4-no-repeat",
+    "B5-attempts",
+    "B6-one-date",
+    "B9-continue",
+    "A35-change"
+   ],
+   "mechanism": "code",
+   "where": "node brain: step() state machine on the reply, date_said, amount_said and about slots; it holds every counter and writes the one offer the model may make"
+  },
+  {
+   "rules": [
+    "A28-today",
+    "A34-readback",
+    "B7-confirm-once",
+    "A36-one"
+   ],
+   "mechanism": "code",
+   "where": "tool create_promise: pre hook sends only products confirmed in the brain confirm phase, with amount and date from code, never twice; the wording is in the brain step text"
+  },
+  {
+   "rules": [
+    "A32-hardship",
+    "A32-accept",
+    "A32-priority",
+    "A41-restructure",
+    "B10-restructure"
+   ],
+   "mechanism": "code",
+   "where": "tool transfer_to_agent: pre hook sends only the queue the brain step opened (allowed_queue); hardship branch in brain comes before persuasion"
+  },
+  {
+   "rules": [
+    "A37-ok",
+    "A37-retry",
+    "B11-fail",
+    "A38-sms"
+   ],
+   "mechanism": "code",
+   "where": "tool create_promise: post hook counts failures per product and stops after two; brain farewell says recorded and the text-message sentence only after a recorded promise"
+  },
+  {
+   "rules": [
+    "A39-paid",
+    "A40-dispute",
+    "A40-closed"
+   ],
+   "mechanism": "code",
+   "where": "node brain: reply enum paid or dispute closes the product with that reason"
+  },
+  {
+   "rules": [
+    "B8-notes",
+    "B10-no-notes",
+    "A46-nonote"
+   ],
+   "mechanism": "code",
+   "where": "tool add_note: pre hook sends only notes planned by brain, never for one product or on a transfer, reason from code"
+  },
+  {
+   "rules": [
+    "A46-close",
+    "A46-head",
+    "A46-promise",
+    "A46-paid",
+    "A46-transferred",
+    "A46-nopromise",
+    "A46-notverified",
+    "A46-notreached",
+    "A46-transfer-wins",
+    "B12-table",
+    "B12-promise-wins",
+    "B0-scope"
+   ],
+   "mechanism": "code",
+   "where": "node brain: finish branch sets outcome and reason; tool close_call runs at end_of_call"
+  },
+  {
+   "rules": [
+    "A47-bye"
+   ],
+   "mechanism": "structure",
+   "where": "node end: terminal spoken_message from the brain farewell"
+  }
+ ]
+}
