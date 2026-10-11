@@ -5,7 +5,7 @@ PHASES = [
     {"n": 0, "skill": "read-brief", "prompt": "Phase 0 of 3: use the read-brief skill.",
      "reads": ["inputs.json", "topics.json"]},
     {"n": 1, "skill": "compose-workflow", "prompt": "Phase 1 of 3: use the compose-workflow skill.",
-     "reads": ["docs/workflow-format.md", "docs/tools-and-code.md", "examples/base-agent.json"]},
+     "reads": ["docs/workflow-format.md", "docs/tools-and-code.md", "examples/base-agent.json", "format-rules.md"]},
     {"n": 2, "skill": "test-and-repair", "prompt": "Phase 2 of 3: use the test-and-repair skill.",
      "reads": []},
 ]

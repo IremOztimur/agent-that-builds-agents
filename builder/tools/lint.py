@@ -36,7 +36,7 @@ def lint(wf, base_url=None):
     bad, warn = [], []
     nodes = wf.get("nodes", {})
     if wf.get("initial_node") not in nodes:
-        bad.append("initial_node %r is not a node" % wf.get("initial_node"))
+        bad.append("[F4] initial_node %r is not a node" % wf.get("initial_node"))
     def has_null(x):
         if x is None:
             return True
@@ -46,48 +46,48 @@ def lint(wf, base_url=None):
             return any(has_null(v) for v in x)
         return False
     if has_null(wf):
-        bad.append("null value in workflow (the schema is strict; omit the key or use an empty string)")
+        bad.append("[F1] null value in workflow (the schema is strict; omit the key or use an empty string)")
     for name, n in nodes.items():
         t = n.get("node_type")
         if n.get("tools") and t != "conversation":
-            bad.append("%s: tools on a %s node are silently dropped" % (name, t))
+            bad.append("[F2] %s: tools on a %s node are silently dropped" % (name, t))
         if n.get("pre_actions") and t == "conversation":
-            bad.append("%s: pre_actions on a conversation node are silently dropped" % name)
+            bad.append("[F2] %s: pre_actions on a conversation node are silently dropped" % name)
         if t == "conversation" and not n.get("max_turn_transition"):
-            bad.append("%s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
+            bad.append("[F11] %s: no max_turn_transition (max_node_turns defaults to 10 user turns and the cap does nothing without a target)" % name)
         if t == "conversation" and int(n.get("max_node_turns", 10)) > MAX_TURNS:
-            bad.append("%s: max_node_turns is %s; at most %d, so a stuck loop still ends" % (name, n.get("max_node_turns"), MAX_TURNS))
+            bad.append("[F11] %s: max_node_turns is %s; at most %d, so a stuck loop still ends" % (name, n.get("max_node_turns"), MAX_TURNS))
         elif t == "conversation" and int(n.get("max_node_turns", 10)) > WARN_TURNS:
-            warn.append("%s: max_node_turns is %s; size it from the longest real conversation in this step (above %d a loop runs long)" % (name, n.get("max_node_turns"), WARN_TURNS))
+            warn.append("[W7] %s: max_node_turns is %s; size it from the longest real conversation in this step (above %d a loop runs long)" % (name, n.get("max_node_turns"), WARN_TURNS))
         for es in n.get("extraction_schema", []):
             if "min_confidence" not in es:
-                bad.append("%s: extraction variable %s has no min_confidence (the default 0.95 silently discards values)" % (name, es.get("name")))
+                bad.append("[F6] %s: extraction variable %s has no min_confidence (the default 0.95 silently discards values)" % (name, es.get("name")))
         for tr in n.get("transitions", []):
             if tr.get("condition", {}).get("logic") == "and":
-                bad.append("%s: a top-level condition group must use logic 'or'; nest an 'and' group inside it" % name)
+                bad.append("[F5] %s: a top-level condition group must use logic 'or'; nest an 'and' group inside it" % name)
             if tr["target_node"] not in nodes and tr["target_node"] != "__previous__":
-                bad.append("%s: transition to unknown node %s" % (name, tr["target_node"]))
+                bad.append("[F4] %s: transition to unknown node %s" % (name, tr["target_node"]))
         if n.get("max_turn_transition") and n["max_turn_transition"] not in nodes:
-            bad.append("%s: max_turn_transition to unknown node" % name)
+            bad.append("[F4] %s: max_turn_transition to unknown node" % name)
         if n.get("passthrough") and (not n.get("transitions") or n["transitions"][-1].get("condition", {}).get("operator") != "always"):
-            bad.append("%s: passthrough node must end with an always transition" % name)
+            bad.append("[F3] %s: passthrough node must end with an always transition" % name)
         if t == "end_call" and not n.get("terminal"):
-            bad.append("%s: end_call node without terminal" % name)
+            bad.append("[F13] %s: end_call node without terminal" % name)
         for label, src in code_strings(n):
             if "{{" in src or "}}" in src:
-                bad.append("%s/%s: double brace inside code" % (name, label))
+                bad.append("[F9] %s/%s: double brace inside code" % (name, label))
             try:
                 compile(src, "<%s>" % label, "exec")
             except SyntaxError as e:
-                bad.append("%s/%s: python syntax error: %s" % (name, label, e))
+                bad.append("[F9] %s/%s: python syntax error: %s" % (name, label, e))
         for m in n.get("response_mapping", []) + [m for c in n.get("tools", []) for m in c.get("response_mapping", [])]:
             if not m.get("path", "").startswith("data."):
-                bad.append("%s: response_mapping path %r should start with data." % (name, m.get("path")))
+                bad.append("[F8] %s: response_mapping path %r should start with data." % (name, m.get("path")))
         for fname, c, url in calls(n):
             if base_url and not url.startswith(base_url):
-                bad.append("%s: %s calls %r, outside the tool API" % (name, fname, url))
+                bad.append("[F10] %s: %s calls %r, outside the tool API" % (name, fname, url))
             if '"const"' in json.dumps(c.get("function", {}).get("parameters", {})):
-                bad.append("%s: %s uses const; the engine bakes only default" % (name, fname))
+                bad.append("[F10] %s: %s uses const; the engine bakes only default" % (name, fname))
     def can_end(n):
         return n.get("node_type") == "end_call" or any(t.get("function", {}).get("handler") == "__function__:end_call" for t in n.get("tools", []))
     ends = {k for k, n in nodes.items() if can_end(n)}
@@ -100,13 +100,13 @@ def lint(wf, base_url=None):
                 reach.add(k); grew = True
     for k in nodes:
         if k not in reach:
-            bad.append("%s cannot reach an end_call node or tool" % k)
+            bad.append("[F4] %s cannot reach an end_call node or tool" % k)
     reference_rules(wf, nodes, bad, warn)
     lines = json.dumps(wf, indent=1).count("\n") + 1
     if lines > 900:
-        warn.append("workflow is %d lines pretty-printed; the target is about 600. Simplify." % lines)
+        warn.append("[W7] workflow is %d lines pretty-printed; the target is about 600. Simplify." % lines)
     elif lines > 700:
-        warn.append("workflow is %d lines pretty-printed; the target is about 600." % lines)
+        warn.append("[W7] workflow is %d lines pretty-printed; the target is about 600." % lines)
     return bad, warn, lines
 
 
@@ -127,39 +127,39 @@ def chain_length(nodes, start):
 def reference_rules(wf, nodes, bad, warn):
     """What docs/workflow-format.md and docs/tools-and-code.md say, as checks."""
     if wf.get("context_variables"):
-        warn.append("context_variables: a workflow saved over the API came back without this key (workflow-format.md). Put the values in the prompt with {{variable}}")
+        warn.append("[W5] context_variables: a workflow saved over the API came back without this key (workflow-format.md). Put the values in the prompt with {{variable}}")
     for name, n in nodes.items():
         t = n.get("node_type")
         for c in n.get("pre_actions", []):
             if BLANKS_URL.search(c.get("pre_process_code") or ""):
-                bad.append("%s: a node that runs on entry must make its call. Blanking the url in a pre_actions hook makes the platform log a failed api_call on every pass; "
+                bad.append("[F14] %s: a node that runs on entry must make its call. Blanking the url in a pre_actions hook makes the platform log a failed api_call on every pass; "
                            "skip the node with a transition on a variable instead (tools-and-code.md, \"Use pre_actions when the call must always run\")" % name)
         if n.get("passthrough") and chain_length(nodes, name) >= 3 and not any(m.get("passthrough") and name in [x["target_node"] for x in m.get("transitions", [])] for m in nodes.values()):
-            warn.append("%s starts a chain of %d passthrough nodes. If any of them is an optional action, it belongs in one conversation node with several tools, not in a chain (tools-and-code.md)" % (name, chain_length(nodes, name)))
+            warn.append("[W1] %s starts a chain of %d passthrough nodes. If any of them is an optional action, it belongs in one conversation node with several tools, not in a chain (tools-and-code.md)" % (name, chain_length(nodes, name)))
         if "loop_prompt" in n:
-            bad.append("%s: loop_prompt is rejected by the platform (\"Unrecognized key\") although the docs list it. Put what must change after the first turn into task_message" % name)
+            bad.append("[F12] %s: loop_prompt is rejected by the platform (\"Unrecognized key\") although the docs list it. Put what must change after the first turn into task_message" % name)
         if n.get("extraction_prompt") or any(e.get("extraction_prompt") and "{{extractor.speech}}" not in e["extraction_prompt"] for e in n.get("extraction_schema", [])):
             for e in n.get("extraction_schema", []):
                 if e.get("extraction_prompt") and "{{extractor.speech}}" not in e["extraction_prompt"]:
-                    bad.append("%s: extraction_prompt of %s replaces the whole template and must contain {{extractor.speech}}, {{extractor.conversation.last-10}}, {{extractor.type_preamble}} and {{extractor.variables_list}}" % (name, e.get("name")))
+                    bad.append("[F7] %s: extraction_prompt of %s replaces the whole template and must contain {{extractor.speech}}, {{extractor.conversation.last-10}}, {{extractor.type_preamble}} and {{extractor.variables_list}}" % (name, e.get("name")))
         for e in n.get("extraction_schema", []):
             if "date" in str(e.get("name", "")).lower() and e.get("type") == "string" and not e.get("enum_values"):
-                warn.append("%s: %s looks like a date but is typed string; declare dates as type \"date\" so the extractor gets today's date" % (name, e.get("name")))
+                warn.append("[W2] %s: %s looks like a date but is typed string; declare dates as type \"date\" so the extractor gets today's date" % (name, e.get("name")))
         if t == "end_call":
             term = n.get("terminal", {}).get("function", {}).get("parameters", {}).get("properties", {})
             if (n.get("on_enter") or {}).get("type") not in (None, "silent") and term.get("message_mode", {}).get("default") == "none":
-                bad.append("%s: an end_call node with an on_enter line and message_mode none hangs up silently; put the sentence in spoken_message and set on_enter to silent" % name)
+                bad.append("[F13] %s: an end_call node with an on_enter line and message_mode none hangs up silently; put the sentence in spoken_message and set on_enter to silent" % name)
         if re.search(r"\bnode\b", (n.get("task_message") or "")):
-            warn.append("%s: task_message talks about nodes; the model does not know about nodes and narrates steps that have not happened" % name)
+            warn.append("[W6] %s: task_message talks about nodes; the model does not know about nodes and narrates steps that have not happened" % name)
         for tr in n.get("transitions", []):
             for grp in tr.get("condition", {}).get("conditions", []):
                 for v in ([grp] if "variable" in grp else grp.get("conditions", [])):
                     ops = {str(x.get("operand")) for x in ([c for g in tr["condition"]["conditions"] for c in ([g] if "variable" in g else g.get("conditions", []))]) if x.get("variable") == v.get("variable") and x.get("operator") == "equals"}
                     if ("true" in ops) != ("True" in ops):
-                        warn.append("%s: transition to %s tests %s against only one spelling of a boolean; test both \"true\" and \"True\" or use a string value" % (name, tr["target_node"], v.get("variable")))
+                        warn.append("[W3] %s: transition to %s tests %s against only one spelling of a boolean; test both \"true\" and \"True\" or use a string value" % (name, tr["target_node"], v.get("variable")))
         for c in n.get("tools", []):
             if "call" not in str(c.get("function", {}).get("description", "")).lower():
-                warn.append("%s: tool %s has no \"CALL it when ...\" trigger in its description; the model may talk about the action instead of taking it" % (name, c.get("function", {}).get("name")))
+                warn.append("[W4] %s: tool %s has no \"CALL it when ...\" trigger in its description; the model may talk about the action instead of taking it" % (name, c.get("function", {}).get("name")))
 
 
 if __name__ == "__main__":
