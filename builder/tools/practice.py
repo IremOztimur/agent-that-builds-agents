@@ -201,7 +201,7 @@ def all_cases():
     if not FINAL:
         return json.load(open(SEALED / "public-test-set.json"))
     return [{**t, "level": t.get("level", ""), "brief": "final", "family": t.get("family", t["id"]), "identity": {},
-             "ledger_id": t.get("ledger_id") or t["variables"].get("customer_id")} for t in json.load(open(WORK / "topics.json"))]
+             "ledger_id": t.get("ledger_id") or t["variables"].get("customerNumber") or t["variables"].get("customer_id")} for t in json.load(open(WORK / "topics.json"))]
 
 
 def mock(path, body=None):
@@ -294,7 +294,7 @@ def run(argv):
         if missed:
             res["failed"].append("conversation: [wording] rules " + ", ".join(missed))
         rows.append({"id": c["id"], "level": c["level"], "style": talk[c["id"]], "pass": not res["failed"], "failed": res["failed"], "call_id": r.get("callId"),
-                     "tools": [x["tool"] for x in led["calls"]], "customer_id": sessions[c["id"]]["customer_id"]})
+                     "tools": [x["tool"] for x in led["calls"]], "customer_id": c["ledger_id"] if FINAL else sessions[c["id"]]["customer_id"]})
     if stoprule.is_dead(said_counts):
         event("platform", "DEAD ROUND: in all %d calls the agent said nothing after its opening line, so the model service is not answering; the round is not recorded" % len(said_counts))
         sys.exit("PLATFORM: in every call the agent said nothing after its opening line. That is the model service not answering, not your workflow; this round is not recorded. "
