@@ -15,7 +15,7 @@ def best_measured(work, trace):
     if not ledger.exists() or not pubs.exists():
         trace.line("best", "no full practice round was recorded; publishing workflow.json as it is")
         return None
-    ids = [c["id"] for c in json.load(open(sealed_dir(work) / "public-test-set.json"))]
+    ids = [t["id"] for t in json.load(open(work / "topics.json"))]
     top = stoprule.best(json.load(open(ledger)), ids)
     if top is None:
         return None
@@ -37,7 +37,7 @@ def finalize(work, slot, trace, existed=None):
     chosen = best_measured(work, trace)
     if chosen is not None:
         wf = chosen
-    base = json.load(open(work / json.load(open(work / "inputs.json"))["tools"]))["servers"][0]["url"].rstrip("/")
+    base = json.load(open(work / "inputs.json")).get("base_url")
     bad, _, lines = lint.lint(wf, base)
     trace.line("lint", "%d lines, %d nodes, %s" % (lines, len(wf["nodes"]), "clean" if not bad else "FAILED: " + "; ".join(bad)[:300]))
     if bad:

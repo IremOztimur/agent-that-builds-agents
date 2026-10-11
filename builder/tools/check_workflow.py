@@ -15,7 +15,7 @@ import check_design, inputs, lint
 def check(path="workflow.json"):
     """(must-fix problems, warnings)."""
     wf = json.load(open(path))
-    base = json.load(open(inputs.tools_path()))["servers"][0]["url"].rstrip("/")
+    base = inputs.base_url()
     bad, warn, _ = lint.lint(wf, base)
     bad = list(bad)
     if not pathlib.Path("design.json").exists():

@@ -50,3 +50,62 @@ def mismatch(e, expected):
     if sorted(t["queue"] for t in got["transfers"]) != sorted(t["queue"] for t in exp["transfers"]):
         parts.append("transfers")
     return parts
+
+
+def _same(a, b):
+    try:
+        return round(float(a), 2) == round(float(b), 2)
+    except (TypeError, ValueError):
+        return norm(a) == norm(b)
+
+
+def _args_match(want, got):
+    return all(k in got and _same(v, got[k]) for k, v in (want or {}).items())
+
+
+def final_score(e, ledger):
+    """Failed checks of one customer against a mock's ledger {"calls": [{"tool", "args"}], "state": {...}}.
+    Every expected call must be there once (the arguments that matter match); a tool named in `calls` must not be called more often than expected;
+    a forbidden tool must not appear; every key of `state` must match. Names the part and what the agent recorded, never the expectation."""
+    bad, calls = [], list(ledger.get("calls") or [])
+    if ledger.get("error"):
+        return ["ledger: " + str(ledger["error"])]
+    pool = list(calls)
+    for want in e.get("calls") or []:
+        hit = next((c for c in pool if c.get("tool") == want["tool"] and _args_match(want.get("args"), c.get("args") or {})), None)
+        if hit is None:
+            bad.append("calls missing %s (agent recorded: %s)" % (want["tool"], [(c.get("tool"), c.get("args")) for c in calls if c.get("tool") == want["tool"]] or "no such call"))
+        else:
+            pool.remove(hit)
+    named = {w["tool"] for w in e.get("calls") or []}
+    for c in pool:
+        if c.get("tool") in named:
+            bad.append("calls extra %s (agent recorded: %s)" % (c["tool"], c.get("args")))
+    for tool in e.get("forbidden_calls") or []:
+        if any(c.get("tool") == tool for c in calls):
+            bad.append("forbidden call %s was made" % tool)
+    state = ledger.get("state") or {}
+    for k, v in (e.get("state") or {}).items():
+        if k not in state or not _same(v, state[k]):
+            bad.append("state %s (agent left: %r)" % (k, state.get(k)))
+    return bad
+
+
+PERSONA = """OUTPUT RULE: Write only the words you say on the phone. No stage directions, no brackets. One or two short sentences per turn, then wait for the other side.
+LANGUAGE: speak the language the text below is written in.
+
+WHO YOU ARE AND WHAT HAPPENS IN THIS CALL: {script}
+
+RULES:
+- Answer what you are asked. Do not volunteer information nobody asked for.
+- When you give a number or a date, say all of it in one turn. Never stop halfway through.
+- Do not invent dates, amounts or facts that are not written above. If asked something that is not covered, give a short neutral answer.
+- If the caller reads something back and it matches what you agreed, confirm it.
+- When the caller says goodbye, say goodbye and say nothing more."""
+
+
+def persona(topic, e, style_text):
+    """The simulated customer of one topic, and the checks the judge reads, for a case folder (no kit helpers needed)."""
+    return {"name": "%s %s%s" % (topic["id"], topic.get("title", ""), " [%s]" % style_text[0] if style_text else ""),
+            "prompt": PERSONA.format(script=topic["script"]) + ("\n\n" + style_text[1] if style_text else ""),
+            "successCriteria": "All of these are true:\n- " + "\n- ".join(checks(e)), "tags": ["hackathon", "final"]}

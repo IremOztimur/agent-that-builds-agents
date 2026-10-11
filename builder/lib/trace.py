@@ -10,5 +10,7 @@ class Trace:
         self.line("start", time.strftime("%Y-%m-%dT%H:%M:%S%z"))
 
     def line(self, kind, text):
+        row = "%s | %-8s | %s" % (time.strftime("%H:%M:%S"), kind, str(text).replace("\n", " ")[:400])
         with open(self.path, "a") as f:
-            f.write("%s | %-8s | %s\n" % (time.strftime("%H:%M:%S"), kind, str(text).replace("\n", " ")[:400]))
+            f.write(row + "\n")
+        print(row, flush=True)       # the submission records everything the builder prints (python3 builder/build.py ... 2>&1 | tee traces/final.log)

@@ -9,16 +9,30 @@ SKILLS = ["read-brief", "compose-workflow", "test-and-repair"]
 
 
 def prepare(brief, api, cases, dev=False):
-    text = intake.brief_text(brief)
-    intake.check_tool_api(api)
+    """A brief file plus a tool API file (development), or a case folder plus the URL of your mock (the final: `api` is that URL)."""
+    final = pathlib.Path(brief).is_dir()
     work = pathlib.Path(tempfile.mkdtemp(prefix="builder-"))
     (work / "input").mkdir()
+    if final:
+        info = intake.ingest_folder(brief, work / "input")
+        text = (work / "input" / "corpus.md").read_text()
+        meta = {"mode": "final", "brief": info["corpus"], "tools": info["contract"], "base_url": api.rstrip("/"), "mock_url": api.rstrip("/"),
+                "brief_lines": len(text.splitlines()), "documents": info["documents"], "unconverted": info["unconverted"], "cases": None, "dev": False}
+        (work / "inputs.json").write_text(json.dumps(meta))
+        return _finish(work, final=True)
+    text = intake.brief_text(brief)
+    spec = intake.check_tool_api(api)
     bname = pathlib.Path(brief).name + (".txt" if pathlib.Path(brief).suffix.lower() == ".docx" else "")
     (work / "input" / bname).write_text(text)
     shutil.copy(api, work / "input" / pathlib.Path(api).name)
-    (work / "inputs.json").write_text(json.dumps({"brief": "input/" + bname, "tools": "input/" + pathlib.Path(api).name,
+    (work / "inputs.json").write_text(json.dumps({"mode": "dev", "brief": "input/" + bname, "tools": "input/" + pathlib.Path(api).name,
+                                                  "base_url": spec["servers"][0]["url"].rstrip("/"),
                                                   "brief_lines": len(text.splitlines()), "cases": cases, "dev": dev}))
     (work / "topics.json").write_text(json.dumps(topics(cases), indent=1))
+    return _finish(work, final=False)
+
+
+def _finish(work, final):
     (work / "docs").mkdir()
     for d in ("workflow-format.md", "tools-and-code.md", "api.md"):
         shutil.copy(KIT / "docs" / d, work / "docs" / d)
@@ -29,7 +43,7 @@ def prepare(brief, api, cases, dev=False):
     for s in SKILLS:
         shutil.copytree(BUILDER / "skills" / s, work / ".claude" / "skills" / s)
     (work / "versions").mkdir()
-    (work / ".sealed").write_text(str(_seal(work)))
+    (work / ".sealed").write_text(str(_seal(work, final)))
     return work
 
 
@@ -46,14 +60,15 @@ def topics(cases):
     return out
 
 
-def _seal(work):
+def _seal(work, final=False):
     sealed = pathlib.Path(tempfile.mkdtemp(prefix="sealed-"))
     (sealed / "tools").mkdir()
     (sealed / "results").mkdir()
-    for f in ("run_cases.py", "score.py"):
-        shutil.copy(KIT / "tools" / f, sealed / "tools" / f)
     shutil.copy(KIT / "freya.py", sealed / "freya.py")
-    shutil.copy(KIT / "public-test-set.json", sealed / "public-test-set.json")
+    if not final:         # the practice bank, its customers and its scorer exist for the practice briefs only
+        for f in ("run_cases.py", "score.py"):
+            shutil.copy(KIT / "tools" / f, sealed / "tools" / f)
+        shutil.copy(KIT / "public-test-set.json", sealed / "public-test-set.json")
     personas = BUILDER / ".personas.json"           # persona ids are reused so the workspace does not fill up
     if personas.exists():
         shutil.copy(personas, sealed / ".personas.json")

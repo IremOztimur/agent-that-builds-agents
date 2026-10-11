@@ -11,7 +11,7 @@ class T:
 def fake(rounds, latest):
     w = pathlib.Path(tempfile.mkdtemp()); s = pathlib.Path(tempfile.mkdtemp())
     (w / "versions").mkdir(); (w / ".sealed").write_text(str(s))
-    json.dump([{"id": "c%02d" % i} for i in range(13)], open(s / "public-test-set.json", "w"))
+    json.dump([{"id": "c%02d" % i} for i in range(13)], open(w / "topics.json", "w"))
     json.dump(rounds, open(s / "rounds.json", "w"))
     pubs = []
     for n in (1, 2, 3, 4):

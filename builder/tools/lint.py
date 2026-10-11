@@ -190,8 +190,7 @@ if __name__ == "__main__":
     try:
         sys.path.insert(0, __import__("os").path.dirname(__file__))
         import inputs
-        api = sys.argv[2] if len(sys.argv) > 2 else str(inputs.tools_path())
-        base = json.load(open(api))["servers"][0]["url"].rstrip("/")
+        base = json.load(open(sys.argv[2]))["servers"][0]["url"].rstrip("/") if len(sys.argv) > 2 else inputs.base_url()
     except Exception:
         pass
     bad, warn, lines = lint(wf, base)

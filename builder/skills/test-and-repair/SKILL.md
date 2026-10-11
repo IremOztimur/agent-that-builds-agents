@@ -5,7 +5,7 @@ description: Phase 2. Run the practice customers and repair in rounds, as long a
 
 # Phase 2: test and repair
 
-`tools/practice.py` plays the practice customers (`cases` in `inputs.json`: A, B or AB) against your published agent. Each customer is a topic: a kind of call (see `topics.json`). A hidden customer raises the same topic in other words, with other amounts and dates. What counts is your `expectations.json`, derived from `rules.json`; you never see another set of expected values. A repair must be a rule about calls, not about one customer.
+`tools/practice.py` plays the practice customers (dev: `cases` in `inputs.json`: A, B or AB; final: the topics you wrote) against your published agent. In the final the bank is the mock: it files every call under the customer's `ledger_id`, and what counts is your `expectations.json` against that ledger. Each customer is a topic: a kind of call (see `topics.json`). A hidden customer raises the same topic in other words, with other amounts and dates. What counts is your `expectations.json`, derived from `rules.json`; you never see another set of expected values. A repair must be a rule about calls, not about one customer.
 
 Repeat rounds while there is time, but `practice.py` decides when to stop: it prints STOP and refuses another full round when everything passes, when you are already strong and the last repair changed nothing, when the same failures survive two repairs, or after four rounds. Also stop when `python3 tools/clock.py` shows under 5 minutes. A failure that survives a repair is usually the judge or a customer's wording: do not chase it with a customer-specific fix.
 

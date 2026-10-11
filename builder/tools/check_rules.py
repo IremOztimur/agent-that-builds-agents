@@ -36,7 +36,7 @@ def enums(node, path=""):
 
 
 def main(rules_p="rules.json", brief_p=None, tools_p=None):
-    brief_p, tools_p = brief_p or str(inputs.brief_path()), tools_p or str(inputs.tools_path())
+    brief_p, tools_p = brief_p or str(inputs.brief_path()), tools_p or str(inputs.tools_path() or "")
     data = json.load(open(rules_p))
     rules = data["rules"] if isinstance(data, dict) else data
     unused = data.get("unused", {}) if isinstance(data, dict) else {}
@@ -52,14 +52,19 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
             bad.append("duplicate id %s" % rid)
         seen.add(rid)
         for k in ("id", "quote", "class", "status", "stage"):
-            if not r.get(k):
+            if not r.get(k) and not (k == "quote" and r.get("source")):
                 bad.append("%s: missing %s" % (rid, k))
         if r.get("class") not in CLASSES:
             bad.append("%s: class %r not in %s" % (rid, r.get("class"), sorted(CLASSES)))
         if r.get("status") not in STATUS:
             bad.append("%s: status %r not in %s" % (rid, r.get("status"), sorted(STATUS)))
         q = norm(str(r.get("quote", "")))
-        if q and q not in brief:
+        if r.get("source"):
+            if r["source"] not in inputs.meta().get("unconverted", []):
+                bad.append("%s: source %r is not a document without a text copy (those are: %s)" % (rid, r["source"], inputs.meta().get("unconverted", [])))
+            elif not r.get("note"):
+                bad.append("%s: a rule from %s (no text copy) needs a note saying what the document shows" % (rid, r["source"]))
+        elif q and q not in brief:
             bad.append("%s: quote is not a verbatim part of the brief: %r" % (rid, r["quote"][:80]))
         if r.get("status") in LIVE:
             if r.get("kind") not in KINDS:
@@ -74,7 +79,10 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
             if d not in ids:
                 bad.append("%s: depends_on %r is not a rule id" % (r.get("id"), d))
     text = norm(" ".join(str(r.get("quote", "")) + " " + str(r.get("note", "")) for r in rules if r.get("status") != "rejected"))
-    api = json.load(open(tools_p))
+    try:
+        api = json.load(open(tools_p))
+    except Exception:
+        api = {}              # the case folder has no machine-readable contract: nothing to cover
     for path, vals in enums(api):
         for v in vals:
             if str(v).lower() not in text and str(v) not in unused:
@@ -87,7 +95,7 @@ def main(rules_p="rules.json", brief_p=None, tools_p=None):
     uncovered = []
     for i, line in enumerate(raw.splitlines(), 1):
         t = norm(re.sub(r"^[#>*\-\s|]+", "", line))
-        if len(t) < 12 or any(str(a) in skipped for a in (i,)) or str(i) in skipped:
+        if len(t) < 12 or t.startswith("=== file:") or any(str(a) in skipped for a in (i,)) or str(i) in skipped:
             continue
         if not any(t in q or (len(q) >= 12 and q in t) for q in quotes):
             uncovered.append("line %d: %s" % (i, line.strip()[:90]))

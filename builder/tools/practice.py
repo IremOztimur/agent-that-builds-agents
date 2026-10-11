@@ -16,9 +16,12 @@ SEALED = pathlib.Path(os.environ["BUILDER_SEALED"])
 WORK = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(WORK))
 sys.path.insert(0, str(SEALED)); sys.path.insert(0, str(SEALED / "tools"))
-import freya, run_cases, score
+import freya
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import oracle, stoprule, styles as talking
+import inputs, oracle, stoprule, styles as talking
+FINAL = inputs.mode() == "final"          # a case folder and your own mock; otherwise the practice bank and the 13 practice customers
+if not FINAL:
+    import run_cases, score
 
 MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December"
 
@@ -42,6 +45,8 @@ def parts(failed):
             out.append(("conversation", ""))
         elif f.startswith("outcome"):
             out.append(("outcome", f.split(", expected")[0][len("outcome "):]))
+        elif f.split(" ")[0] in ("calls", "state", "forbidden", "ledger"):
+            out.append((f.split(" ")[0], f.split(" ", 1)[1] if " " in f else ""))
         elif f.split(" ")[0] in ("promises", "notes", "callbacks", "transfers"):
             out.append((f.split(" ")[0], f.split(", expected")[0].split(" ", 1)[1]))
         elif "not closed" in f:
@@ -101,7 +106,10 @@ def personas_for(cases, styles):
     import hashlib
     store = SEALED / ".personas.json"
     ids = json.load(open(store)) if store.exists() else {}
-    spec = {c["id"]: run_cases.persona_for(c, {"identity": c["identity"]}, styles.get(c["id"])) for c in cases}
+    if FINAL:
+        spec = {c["id"]: oracle.persona(c, c["expected"], (styles[c["id"]], talking.TEXT[styles[c["id"]]]) if styles.get(c["id"]) else None) for c in cases}
+    else:
+        spec = {c["id"]: run_cases.persona_for(c, {"identity": c["identity"]}, styles.get(c["id"])) for c in cases}
     key = {i: i + ":" + hashlib.sha1(json.dumps(p, sort_keys=True).encode()).hexdigest()[:10] for i, p in spec.items()}
     new = [c for c in cases if key[c["id"]] not in ids]
     if new:
@@ -188,6 +196,25 @@ def collect(sim_id, want, limit):
     return runs
 
 
+def all_cases():
+    """The customers: the 13 practice customers, or the topics the agent wrote from the case folder's test customers."""
+    if not FINAL:
+        return json.load(open(SEALED / "public-test-set.json"))
+    return [{**t, "level": t.get("level", ""), "brief": "final", "family": t.get("family", t["id"]), "identity": {},
+             "ledger_id": t.get("ledger_id") or t["variables"].get("customer_id")} for t in json.load(open(WORK / "topics.json"))]
+
+
+def mock(path, body=None):
+    """The mock's own endpoints: GET /_ledger/<id> (what it received), POST /_reset/<id> (start clean)."""
+    import urllib.request
+    req = urllib.request.Request(inputs.meta()["mock_url"] + path, data=json.dumps(body or {}).encode() if body is not None else None,
+                                 headers={"user-agent": "agent-that-builds-agents/1", "content-type": "application/json"}, method="POST" if body is not None else "GET")
+    try:
+        return json.load(urllib.request.urlopen(req, timeout=20))
+    except Exception as e:
+        return {"error": "the mock did not answer %s: %s" % (path, str(e)[:120])}
+
+
 def scored_cases(cases):
     """The customers as they are scored. Normally the expectations the agent derived from rules.json decide what the bank must show
     and the judge must find. In dev mode (inputs.json "dev") the known expected values decide, and the derived expectations are
@@ -199,6 +226,8 @@ def scored_cases(cases):
     missing = [c["id"] for c in cases if c["id"] not in exp]
     if missing:
         sys.exit("expectations.json has no entry for %s" % ", ".join(missing))
+    if FINAL:
+        return {c["id"]: {**c, "expected": exp[c["id"]], "checks": oracle.checks(exp[c["id"]])} for c in cases}, exp
     if json.load(open(WORK / "inputs.json")).get("dev"):
         off = {c["id"]: oracle.mismatch(exp[c["id"]], c["expected"]) for c in cases}
         bad = {k: v for k, v in off.items() if v}
@@ -217,7 +246,7 @@ def run(argv):
     agent, rest = argv[0], argv[1:]
     opt = {rest[i]: rest[i + 1] for i in range(len(rest) - 1) if rest[i].startswith("--")}
     name, style = opt.get("--name", "run"), opt.get("--style")
-    in_brief = [c for c in json.load(open(SEALED / "public-test-set.json")) if opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]]
+    in_brief = [c for c in all_cases() if FINAL or opt.get("--brief", "AB") == "AB" or c["brief"] == opt["--brief"]]
     holdout = "--holdout" in argv
     if style:                                  # one style for everyone, to look at a single way of talking: not a round
         talk, label = {c["id"]: style for c in in_brief}, style
@@ -235,22 +264,32 @@ def run(argv):
             event("repair", "refused to start another full round: " + stop)
             sys.exit("No further full round: " + stop)
     ids = personas_for(cases, talk)
-    sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
+    if FINAL:
+        for c in cases:
+            mock("/_reset/" + str(c["ledger_id"]), {})
+        sessions = {c["id"]: {**c["variables"], "customer_id": c["ledger_id"]} for c in cases}
+    else:
+        sessions = {c["id"]: score.http("/v1/practice/sessions", {"case": c["id"]})["variables"] for c in cases}
     t0 = time.time()
     sim_id = start(agent, {ids[c["id"]]: sessions[c["id"]] for c in cases})
     runs = {r["personaId"]: r for r in collect(sim_id, len(cases), 420)}
     rows, said_counts = [], []
     for c in cases:
         r = runs.get(ids[c["id"]], {})
-        led = score.http("/v1/practice/ledger/" + sessions[c["id"]]["customer_id"])
-        res = score.score_ledger(c, led)
+        if FINAL:
+            led = mock("/_ledger/" + str(c["ledger_id"]))
+            led.setdefault("calls", [])
+            res = {"pass": False, "failed": oracle.final_score(c["expected"], led)}
+        else:
+            led = score.http("/v1/practice/ledger/" + sessions[c["id"]]["customer_id"])
+            res = score.score_ledger(c, led)
         if not (r.get("endedAt") or r.get("outcome") in ("pass", "fail", "inconclusive")):
             res["failed"].append("conversation: [unfinished] the call did not finish in time")
         elif r.get("outcome") != "pass":
             res["failed"].append("conversation: [%s] %s" % (r.get("outcome"), " ".join(str(r.get("reason") or "no verdict").split())[:500]))
         said = said_by_agent(r.get("callId"))
         said_counts.append(len(said))
-        wrong_record = any(f.split(" ")[0] in ("outcome", "promises", "notes", "callbacks", "transfers") for f in res["failed"])
+        wrong_record = any(f.split(" ")[0] in ("outcome", "promises", "notes", "callbacks", "transfers", "calls", "state", "forbidden", "ledger") for f in res["failed"])
         missed = [] if wrong_record else oracle.wording_misses(derived[c["id"]], rules, " ".join(said))   # wording said after a record that never happened is a symptom
         if missed:
             res["failed"].append("conversation: [wording] rules " + ", ".join(missed))
@@ -271,8 +310,10 @@ def run(argv):
 def chat(argv):
     """A live conversation with the published workflow: three customer turns on a practice customer. Shows every reply and how long it took,
     and fails when a reply is missing, slow or an error. Run it after publishing, before anything else: it finds a broken opening in seconds."""
-    case = json.load(open(SEALED / "public-test-set.json"))[0]
-    variables = score.http("/v1/practice/sessions", {"case": case["id"]})["variables"]
+    case = all_cases()[0]
+    variables = {**case["variables"], "customer_id": case["ledger_id"]} if FINAL else score.http("/v1/practice/sessions", {"case": case["id"]})["variables"]
+    if FINAL:
+        mock("/_reset/" + str(case["ledger_id"]), {})
     state = json.load(open(os.environ["BUILDER_SLOT_STATE"]))[os.environ["BUILDER_SLOT"]]
     call_id, bad = None, False
     for msg in ["Hello?", "Yes, speaking.", "Yes, that is me. Go ahead."]:

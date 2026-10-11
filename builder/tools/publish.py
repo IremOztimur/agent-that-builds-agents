@@ -12,7 +12,7 @@ sys.path.insert(0, str(HERE)); sys.path.insert(0, str(HERE.parent))
 import freya, lint, inputs
 
 wf = json.load(open(sys.argv[1]))
-base = json.load(open(inputs.tools_path()))["servers"][0]["url"].rstrip("/")
+base = inputs.base_url()
 bad, warn, lines = lint.lint(wf, base)
 for w in warn:
     print("WARN", w)

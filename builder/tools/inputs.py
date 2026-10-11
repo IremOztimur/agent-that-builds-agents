@@ -13,7 +13,26 @@ def brief_path():
 
 
 def tools_path():
-    return ROOT / _m.get("tools", "tools.json")
+    """The tool API file, or None when the case folder has no machine-readable contract (the agent reads it as a document)."""
+    return ROOT / _m["tools"] if _m.get("tools") else None
+
+
+def meta():
+    return _m
+
+
+def mode():
+    return _m.get("mode", "dev")
+
+
+def base_url():
+    """Where the tools may call: the mock URL in the final, the server of the tool API file in development."""
+    if _m.get("base_url"):
+        return _m["base_url"].rstrip("/")
+    try:
+        return json.load(open(tools_path()))["servers"][0]["url"].rstrip("/")
+    except Exception:
+        return None
 
 
 def brief_lines():
