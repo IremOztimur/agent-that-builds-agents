@@ -26,6 +26,7 @@ What the platform does with a workflow. Build to these while you design; `tools/
 | W5 | `context_variables` is dropped on save; put the values in the prompt with `{{var}}` | WF context variables |
 | W6 | A `task_message` does not name nodes or routing; the model narrates steps that have not happened | WF prompts |
 | W9 | Every bank call has a `post_process_code` that turns its answer, a failure included, into plain facts for the model, and its failure is counted and branched on (`<tool>_failure_count`, `<tool>_response.status_code`) | TC hooks, counters |
+| W10 | No `test_variables`: it would carry a test customer's values into the agent; every value comes from the call and the services | generality |
 | W7 | Size: about 600 lines, turn caps above 20 run long | WF limits |
 | W8 | A `max_turn_transition` does not lead straight to closing the call; first one more try or an escalation (transfer, callback) | WF limits |
 

@@ -145,6 +145,8 @@ def closes(nodes, k, seen=()):
 
 def reference_rules(wf, nodes, bad, warn):
     """What docs/workflow-format.md and docs/tools-and-code.md say, as checks."""
+    if wf.get("test_variables"):
+        warn.append("[W10] test_variables holds values (%s); leave it out, so no test customer's data is in the agent" % ", ".join(sorted(wf["test_variables"])[:4]))
     if wf.get("context_variables"):
         warn.append("[W5] context_variables: a workflow saved over the API came back without this key (workflow-format.md). Put the values in the prompt with {{variable}}")
     for name, n in nodes.items():
