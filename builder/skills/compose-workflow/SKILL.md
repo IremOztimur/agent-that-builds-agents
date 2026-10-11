@@ -7,6 +7,8 @@ description: Phase 1. Build and publish workflow.json from rules.json, following
 
 Read completely before designing: `docs/workflow-format.md`, `docs/tools-and-code.md`, `examples/base-agent.json`, and `.claude/skills/compose-workflow/format-rules.md` (the platform rules your workflow must follow, F = must, W = look). Follow them while you build, do not guess. Every value comes from `rules.json` or the tool API. The model in a node sees only that node's prompt, so a node is the policy that is in force.
 
+Time box: about a third of the build. Write `workflow.json` with a generator script and `design.json` in groups (one row may list many rules).
+
 1. Write `design.json`: `{"rows": [{"rules": ["r1", "r2"], "mechanism": "structure|code|prompt", "where": "<a node, tool or hook of workflow.json>"}], "warnings": {}}`, covering every live rule. By `kind`: gate, limit and allowed_set rules, and every rule that names a number or a count, are `structure` or `code`, never `prompt`. A `wording` rule puts its `wording` into the workflow exactly as the brief has it. A prompt row names its node (or system_prompt).
 2. Keep it small: at most 1000 lines, 4 to 8 nodes, at most 8 prompt-only rules per node. More rules than that: split the node by state, or settle them in code and show the model the conclusion.
 3. Decisions that matter (the docs explain how):

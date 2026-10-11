@@ -7,12 +7,15 @@ from .paths import ROOT, SLOTS
 from .trace import Trace
 
 
+BOXES = (0.30, 0.62)   # share of the build by which phase 0 and phase 1 must be done; phase 2 gets the rest
 RESERVE = 90          # seconds kept for the final lint, publish and export, so the whole run stays inside --minutes
 ARTIFACTS = ["rules.json", "design.json", "workflow.json", "scores.json", "repairs.md", "report.md"]
 
 
 async def run_phases(work, slot, deadline, trace):
     """Returns True when all three phases passed their gates."""
+    t_start = time.time()
+    boxes = [t_start + BOXES[0] * (deadline - t_start), t_start + BOXES[1] * (deadline - t_start), deadline]
     async with agent.Session(work, slot, deadline, trace) as session:
         for ph in phases.PHASES:
             n, prompt, seen = ph["n"], ph["prompt"], ""
@@ -21,7 +24,13 @@ async def run_phases(work, slot, deadline, trace):
                     trace.line("timeout", "no time left for phase %d" % n)
                     return False
                 trace.line("phase", "phase %d start (%s), attempt %d, %.1f min left" % (n, ph["skill"], attempt, (deadline - time.time()) / 60))
-                seen += " " + await session.send(prompt, n)
+                until = boxes[n] if attempt == 1 else min(deadline, time.time() + 240)
+                box_min = max(1, int((until - time.time()) / 60))
+                seen += " " + await session.send("%s Time box for this phase: %d minutes (the clock tool shows what is left of the whole build)." % (prompt, box_min), n, until)
+                if session.timed_out and n < 2 and time.time() < deadline - 60:
+                    trace.line("timebox", "phase %d used its time box; asking the agent to finish with the minimum that passes the check" % n)
+                    seen += " " + await session.send("The time box of this phase is over. Finish it now, in the simplest form that passes its check: write what is still missing, "
+                                                     "run the check, and stop. You have 3 minutes.", n, min(deadline, time.time() + 180))
                 problems = phases.gate(n, work, seen)
                 trace.line("gate", "phase %d: %s" % (n, "passed" if not problems else "; ".join(problems)[:300]))
                 if not problems:

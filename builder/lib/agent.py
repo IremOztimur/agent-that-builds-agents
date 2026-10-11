@@ -31,10 +31,11 @@ class Session:
     async def __aexit__(self, *exc):
         await self.client.disconnect()
 
-    async def send(self, prompt, phase):
+    async def send(self, prompt, phase, until=None):
         """Sends one prompt and waits until the agent stops or the clock ends. Returns what it read (paths and commands, lower-case)."""
         from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ToolResultBlock, ToolUseBlock, UserMessage
         seen, tests = [], {}
+        self.timed_out = False
 
         async def consume():
             async for m in self.client.receive_response():
@@ -66,8 +67,17 @@ class Session:
         self.trace.line("model", "%s asked: %s" % (self.model, prompt[:200]))
         await self.client.query(prompt)
         try:
-            await asyncio.wait_for(consume(), timeout=max(30, self.deadline - time.time()))
+            self.timed_out = False
+            await asyncio.wait_for(consume(), timeout=max(20, min(until or self.deadline, self.deadline) - time.time()))
         except asyncio.TimeoutError:
+            self.timed_out = True
             await self.client.interrupt()
-            self.trace.line("timeout", "the clock ran out during phase %d" % phase)
+            try:                                         # leave the stream clean for the next prompt
+                async def drain():
+                    async for _ in self.client.receive_response():
+                        pass
+                await asyncio.wait_for(drain(), timeout=25)
+            except Exception:
+                pass
+            self.trace.line("timeout", "the time box of phase %d is over (the whole build ends in %.1f min)" % (phase, (self.deadline - time.time()) / 60))
         return " ".join(seen)
