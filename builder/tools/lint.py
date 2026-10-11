@@ -179,6 +179,9 @@ def reference_rules(wf, nodes, bad, warn):
                     ops = {str(x.get("operand")) for x in ([c for g in tr["condition"]["conditions"] for c in ([g] if "variable" in g else g.get("conditions", []))]) if x.get("variable") == v.get("variable") and x.get("operator") == "equals"}
                     if ("true" in ops) != ("True" in ops):
                         warn.append("[W3] %s: transition to %s tests %s against only one spelling of a boolean; test both \"true\" and \"True\" or use a string value" % (name, tr["target_node"], v.get("variable")))
+        for c in n.get("tools", []) + n.get("pre_actions", []):
+            if c.get("function", {}).get("handler") == "__function__:api_call" and not (c.get("post_process_code") or "").strip():
+                warn.append("[W9] %s: %s has no post_process_code; a failed call reaches the model as a raw error. Turn the answer into plain facts (call_ok, error, attempts_left, next) and branch on the failure count" % (name, c.get("function", {}).get("name")))
         for c in n.get("tools", []):
             if "call" not in str(c.get("function", {}).get("description", "")).lower():
                 warn.append("[W4] %s: tool %s has no \"CALL it when ...\" trigger in its description; the model may talk about the action instead of taking it" % (name, c.get("function", {}).get("name")))
