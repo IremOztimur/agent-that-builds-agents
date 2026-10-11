@@ -1,12 +1,12 @@
-"""The three phases, in order, each with one skill and one deterministic gate. A phase only starts when the previous gate passed."""
+"""The three phases, in order, each with one skill and one deterministic gate. All three run in the same agent session; a phase only starts when the previous gate passed."""
 import json, subprocess, sys
 
 PHASES = [
     {"n": 0, "skill": "read-brief", "prompt": "Phase 0 of 3: use the read-brief skill.",
      "reads": ["inputs.json"]},
-    {"n": 1, "skill": "compose-workflow", "prompt": "Phase 1 of 3: use the compose-workflow skill. Phase 0 is done: rules.json is checked.",
+    {"n": 1, "skill": "compose-workflow", "prompt": "Phase 1 of 3: use the compose-workflow skill.",
      "reads": ["docs/workflow-format.md", "docs/tools-and-code.md", "examples/base-agent.json"]},
-    {"n": 2, "skill": "test-and-repair", "prompt": "Phase 2 of 3: use the test-and-repair skill. Phase 1 is done: workflow.json is published.",
+    {"n": 2, "skill": "test-and-repair", "prompt": "Phase 2 of 3: use the test-and-repair skill.",
      "reads": []},
 ]
 

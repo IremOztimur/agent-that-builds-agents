@@ -2,7 +2,7 @@
 
     python3 builder/build.py <brief file, any name> <tool API file, any name> [--slot NAME] [--cases A|B] [--minutes 20] [--prepare-only]
 
-Three phases in order (read-brief, compose-workflow, test-and-repair), each gated by code. See builder/lib/.
+One agent session works through three phases in order (read-brief, compose-workflow, test-and-repair); code checks each phase before the next starts. See builder/lib/.
 Needs FREYA_API_KEY, FREYA_BANK_TEAM_KEY and a Claude login (or ANTHROPIC_API_KEY); BUILDER_MODEL picks the model.
 """
 import json, pathlib, sys
